@@ -105,16 +105,12 @@ If Step 5b included any corporate structure relationship selections, resolve tho
 
 | Party Name (ID) | Relationship(s) |
 |---|---|
-| **Root Name 1 (ID) Tree** — # key relationships out of # entities in tree | |
 | 🔹 Party Name (ID) | e.g. Ultimate Parent |
-| ➕ 🔹 Party Name (ID) | e.g. Subsidiary |
-| **Root Name 2 (ID) Tree** — # key relationships out of # entities in tree | |
-| 🔹 Party Name (ID) | e.g. Parent |
-| **Other Key Relationships** — # key relationships out of # total entities | |
+| 🔹 Party Name (ID) | e.g. Subsidiary |
 | 🔹 Party Name (ID) | e.g. Shareholder, Beneficial Owner |
 | ➕ 🔹 Party Name (ID) | e.g. Board Member |
 
-> ℹ️ Key relationships are determined when they are existing Intapp parties
+> ℹ️ Key relationships are existing Intapp parties across all corporate trees combined
 > ➕ Indicates party was added during this workflow
 
 ---
@@ -123,9 +119,13 @@ If Step 5b included any corporate structure relationship selections, resolve tho
 
 **➕ Add More Key Corporate Structure Relationships**
 
-Render selectable/suppressed options based on Included vs Total counts. Format:
+Relationship types are aggregated across all corporate trees. Each option reflects the total count of that relationship type across all trees combined, and how many of those are already included as Intapp parties.
+
+Format:
 - Selectable: `X  ➕ **Label** (Included of Total included)`
 - Suppressed: `&nbsp;&nbsp;&nbsp;✅ **Label** (Total of Total included)`
+
+Example: if there are 2 corporate trees each with an Ultimate Parent, and only 1 of those is an existing Intapp party, this renders as a selectable option: `A  ➕ **Ultimate Parent** (1 of 2 included)`
 
 **Prompt:** *Type one or more options to add relationships (e.g. A B C) OR type "RUN" to proceed to Moody's GRID screening of client and existing key corporate structure entities.*
 
@@ -139,6 +139,7 @@ Options:
 - G — Shareholders w/ known ownership ≥10%
 - H — Beneficial Owners w/ known ownership ≥10%
 
+For each entity selected by the user that is not already an Intapp party, call `intapp:create_party` to create it before returning to Step 3. Once all new parties are created, loop back to Step 3 — the standard party detection logic will pick them up automatically on the next pass.
 ---
 
 ▶️ **Step 6: Run Moody's GRID Screen**
