@@ -52,22 +52,23 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 Using the root IDs from Step 2:
 
-**Fetch parties in each corporate tree:**
-1. For each `rootCompanyId`, call `get_client_profile` on that root party ID with the `parties` property (e.g. `GET /parties/{rootId}?properties=CorporateTrees,Parties`)
-2. The response will return only nodes in the tree that are existing Intapp parties — do not attempt to traverse the full tree manually
-3. Capture all returned party nodes
+**Fetch each corporate tree with parties:**
+1. For each `rootCompanyId`, call `intapp:get_corporate_tree` with `providerType` and `rootCompanyId` from Step 2, requesting `properties=Parties`
+2. Walk the returned tree recursively — every node in the tree is returned, not just existing Intapp parties
+3. For each node, inspect its `parties[]` array — if a node has a non-empty `parties[]`, it is linked to one or more existing Intapp parties; capture each `partyId` from that array
+4. Record the tree node's position (depth, parent node) alongside the captured `partyId` for relationship classification in the next sub-step
 
 **Determine the relationship** of each captured node to the client:
-- If the entity is the root: Ultimate Parent
-- If the entity is an ancestor of the client (between root and client): Parent
-- If the entity is a descendant of the client (in the client's `subCompanies` tree): Subsidiary
-- If the entity shares the same immediate parent as the client: Sibling
+- If the entity is the root: **Ultimate Parent**
+- If the entity is an ancestor of the client (between root and client): **Parent**
+- If the entity is a descendant of the client (in the client's `subCompanies` tree): **Subsidiary**
+- If the entity shares the same immediate parent as the client: **Sibling**
 
 Track each captured party:
 
 | Field | Value |
 |---|---|
-| `partyId` | Existing Intapp party ID |
+| `partyId` | Existing Intapp party ID (from `parties[]` on the tree node) |
 | `name` | Party name |
 | `relationship` | Ultimate Parent, Parent, Subsidiary, or Sibling |
 | `source` | `corporate_tree` |
