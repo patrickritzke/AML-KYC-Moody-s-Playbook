@@ -117,27 +117,31 @@ If Step 5b included any corporate structure relationship selections, resolve tho
 
 ▶️ **Step 5b: Prompt User to Add More Key Corporate Structure Relationships to Screen**
 
-**➕ Add More Key Corporate Structure Relationships**
+Provide user the option to add more corproate structure relationships:
+- Only provide explicit relationship options specified in this step
+- Identify the unique entities based on the externalID that map to each relationship. Keep in mind that some externalIDs could be in multiple lists (i.e. ultimate parent and all parents)
+- For each relationship, determine which externalIds are already a party vs. the ones that are not
+- When there are multiple rootID corporate trees, aggregate the unique IDs for each relationships (i.e. there could be 2 external IDs that are ultimate parents)
+- Categorize each relationship
+  - Selectable - not all external IDs in the list are already parties
+    - These relationships should have a option letter and ➕ icon
+  - Suppressed - all external IDs in the list are already parties (there is no reason the user should select this relationship option)
+    - These relationships should have no option letter and ✅ icon
+- Prepare a suffix that shows # included of # total for each relationship (DO NOT try and display names or any other info)
+  -i.e. (2 of 4 included)
+  -i.e. (2 of 2 included)
 
-Relationship types are aggregated across all corporate trees. Each option reflects the total count of that relationship type across all trees combined, and how many of those are already included as Intapp parties.
-
-Format:
-- Selectable: `X  ➕ **Label** (Included of Total included)`
-- Suppressed: `&nbsp;&nbsp;&nbsp;✅ **Label** (Total of Total included)`
-
-Example: if there are 2 corporate trees each with an Ultimate Parent, and only 1 of those is an existing Intapp party, this renders as a selectable option: `A  ➕ **Ultimate Parent** (1 of 2 included)`
-
-**Prompt:** *Type one or more options to add relationships (e.g. A B C) OR type "RUN" to proceed to Moody's GRID screening of client and existing key corporate structure entities.*
+**Prompt:** *Type one or more options to ➕ add relationships (e.g. A B C) OR type "RUN" to proceed to Moody's GRID screening of client and existing key corporate structure entities.*
 
 Options:
-- A — Ultimate Parent
-- B — Client's Immediate Parent
-- C — All Client's Parents
-- D — All Client's Immediate Subsidiaries
-- E — All Management
-- F — All Board Members
-- G — Shareholders w/ known ownership ≥10%
-- H — Beneficial Owners w/ known ownership ≥10%
+- A ➕ Ultimate Parent (1 of 2)
+-   ✅ Client's Immediate Parent (2 of 2)
+- C ➕ All Client's Parents (2 of 4)
+- D ➕ All Client's Immediate Subsidiaries (0 of 5)
+- E ➕ All Management (2 of 10)
+- F ➕ All Board Members (1 of 4)
+- G ➕ Shareholders w/ known ownership ≥10% (0 of 4)
+- H ➕ Beneficial Owners w/ known ownership ≥10% (1 of 2)
 
 For each entity selected by the user that is not already an Intapp party, call `intapp:create_party` to create it before returning to Step 3. Once all new parties are created, loop back to Step 3 — the standard party detection logic will pick them up automatically on the next pass.
 ---
