@@ -7,6 +7,19 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - Deliver risk-scored results with clear HIGH/MEDIUM/LOW event classification
 - Establish ongoing monitoring and schedule periodic reviews
 
+<!--
+### Playbook Variables
+- [reqType] = "AML/KYC - Moody's GRID"
+- [reqRefParty] = "Party"
+- [reqRefGrid] = "Custom GRID
+  - [reqRefGridName] = "Name"
+  - [reqRefGridRiskScore] = "Risk Score"
+  - [reqRefGridRelationship] = "Relationship"
+  - [reqRefGridPosssibleMatch] = "Possible Matches"
+  - [reqRefGridLikelyMatch] = "Likely Matches"
+  - [reqRefGridLikelyMatchRiskEvent] = "Likely Matches Risk Events"
+-->
+
 ### Overall Behavior Rules
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
 - **Step 6 may only be entered when the user explicitly types "RUN" at Step 5b. When the user selects options A–H at Step 5b, the workflow returns to Step 3 and must proceed sequentially through every subsequent step (Steps 3 → 4 → 5 → 5b) before stopping at Step 5b for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
