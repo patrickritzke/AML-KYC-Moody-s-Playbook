@@ -1,0 +1,191 @@
+### Scope
+Complete AML/KYC initiation workflow triggered by natural language command (e.g., "Initiate AML/KYC for Acme Capital LLC"). Covers client lookup, corporate tree resolution, party scoping, conflicts-based risk screening via Moody's GRID, risk scoring, match acceptance, and ongoing monitoring setup.
+
+### Goals
+- Automate end-to-end AML/KYC initiation with minimal manual intervention
+- Ensure comprehensive corporate structure screening with user-controlled scope
+- Deliver risk-scored results with clear HIGH/MEDIUM/LOW event classification
+- Establish ongoing monitoring and schedule periodic reviews
+
+### Overall Behavior Rules
+- Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
+- **Step 6 may only be entered when the user explicitly types "RUN" at Step 5b. When the user selects options A–H at Step 5b, the workflow returns to Step 3 and must proceed sequentially through every subsequent step (Steps 3 → 4 → 5 → 5b) before stopping at Step 5b for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
+
+### Communication Preferences
+- **Execution mode:** Silent execution with minimal updates
+- **Status updates:** Don't display outside of friendly messages
+- **Preambles:** None - proceed directly to work
+- **Summaries:** No step-level summaries or confirmations. Proceed directly to the next step unless user input is required. Final summary only at the end of the full workflow.
+- **Tool/task visibility:** Do not display raw tool names, task counts, or execution details. Instead show a single friendly status line at each major milestone.
+- **Task list visibility:** Do not display task lists, task counts, or task progress indicators at any point during the workflow. Execute silently without surfacing the task plan to the user.
+- **Only display the friendly status messages defined in the table below for execution steps. Display steps have no status message — their output is the communication. Do not display any other status updates, confirmations, progress indicators, or commentary at any point during the workflow — including on loop iterations.**
+
+| Step | Friendly Status Message |
+|---|---|
+| 1 | 🔍 Looking up [Client Name]... |
+| 2 | 🌳 Finding corporate structure... |
+| 3–4 | 🔗 Identifying key corporate structure relationships... |
+| 6 | 🛡️ Running Moody's GRID screen... |
+| 7 | 📊 Calculating risk scores... |
+
+---
+
+### Workflow Steps
+
+▶️ **Step 1: Client Lookup**
+- Search system for existing client record by entity name
+- If not found: notify user and stop workflow
+- If found: retrieve full client profile and proceed
+
+---
+
+▶️ **Step 2: Find Client's Corporate Tree**
+- Get partyId of client
+- Call `get_client_profile` using the client's partyId to retrieve `corporateTrees`
+- From the response, capture the `rootCompanyId` for each corporate tree
+- Retain the root IDs for use in Step 3
+- If no corporate tree root IDs exist: run third-party lookup and link to best match
+
+---
+
+▶️ **Step 3: Find Other Existing Intapp Parties in Corporate Tree(s)**
+
+Using the root IDs from Step 2:
+
+**Fetch parties in each corporate tree:**
+1. For each `rootCompanyId`, call `get_client_profile` on that root party ID with the `parties` property (e.g. `GET /parties/{rootId}?properties=CorporateTrees,Parties`)
+2. The response will return only nodes in the tree that are existing Intapp parties — do not attempt to traverse the full tree manually
+3. Capture all returned party nodes
+
+**Determine the relationship** of each captured node to the client:
+- If the entity is the root: Ultimate Parent
+- If the entity is an ancestor of the client (between root and client): Parent
+- If the entity is a descendant of the client (in the client's `subCompanies` tree): Subsidiary
+- If the entity shares the same immediate parent as the client: Sibling
+
+Track each captured party:
+
+| Field | Value |
+|---|---|
+| `partyId` | Existing Intapp party ID |
+| `name` | Party name |
+| `relationship` | Ultimate Parent, Parent, Subsidiary, or Sibling |
+| `source` | `corporate_tree` |
+| `was_added` | `false` (pre-existing) |
+
+If Step 5b included any corporate tree relationship selections, resolve those entities and merge into the tracked party list. Deduplicate by partyId — only mark `was_added: true` if not pre-existing.
+
+---
+
+▶️ **Step 4: Find Other Existing Intapp Parties in Other Corporate Structure Relationships**
+
+Run Get board members, Get shareholders, and Get beneficial owners using the client's partyId (not rootId). Capture all nodes that have a partyId.
+
+Track each captured party:
+
+| Field | Value |
+|---|---|
+| `partyId` | Existing Intapp party ID if available, otherwise assign a unique mock ID in the format `US1FAKE001`, `US1FAKE002`, etc. (incrementing across all mock parties) |
+| `name` | Party name |
+| `relationship` | Management, Board, Shareholder, or Beneficial Owner |
+| `source` | `board`, `shareholders`, or `beneficial_owners` |
+| `was_added` | `false` (pre-existing) |
+
+If Step 5b included any corporate structure relationship selections, resolve those entities and merge into the tracked party list. Deduplicate by partyId — only mark `was_added: true` if not pre-existing. Merge all results into the tracked party list from Step 3.
+
+> ⚠️ **Mock limitation:** APIs for board members, shareholders, and beneficial owners do not currently expose partyIDs. For now, use real names where fetchable, or placeholder person names (not companies) if data is unavailable. Assign mock IDs in the format `US1FAKE001`, `US1FAKE002`, etc.
+
+---
+
+▶️ **Step 5: Display Client & Key Corporate Structure Relationships**
+
+**Title:** 🔷 Client Name (ID)
+**Subtitle:** Corporate Tree(s): Root Name 1 (ID), Root Name 2 (ID)
+
+| Party Name (ID) | Relationship(s) |
+|---|---|
+| **Root Name 1 (ID) Tree** — # key relationships out of # entities in tree | |
+| 🔹 Party Name (ID) | e.g. Ultimate Parent |
+| ➕ 🔹 Party Name (ID) | e.g. Subsidiary |
+| **Root Name 2 (ID) Tree** — # key relationships out of # entities in tree | |
+| 🔹 Party Name (ID) | e.g. Parent |
+| **Other Key Relationships** — # key relationships out of # total entities | |
+| 🔹 Party Name (ID) | e.g. Shareholder, Beneficial Owner |
+| ➕ 🔹 Party Name (ID) | e.g. Board Member |
+
+> ℹ️ Key relationships are determined when they are existing Intapp parties
+> ➕ Indicates party was added during this workflow
+
+---
+
+▶️ **Step 5b: Prompt User to Add More Key Corporate Structure Relationships to Screen**
+
+**➕ Add More Key Corporate Structure Relationships**
+
+Render selectable/suppressed options based on Included vs Total counts. Format:
+- Selectable: `X  ➕ **Label** (Included of Total included)`
+- Suppressed: `&nbsp;&nbsp;&nbsp;✅ **Label** (Total of Total included)`
+
+**Prompt:** *Type one or more options to add relationships (e.g. A B C) OR type "RUN" to proceed to Moody's GRID screening of client and existing key corporate structure entities.*
+
+Options:
+- A — Ultimate Parent
+- B — Client's Immediate Parent
+- C — All Client's Parents
+- D — All Client's Immediate Subsidiaries
+- E — All Management
+- F — All Board Members
+- G — Shareholders w/ known ownership ≥10%
+- H — Beneficial Owners w/ known ownership ≥10%
+
+---
+
+▶️ **Step 6: Run Moody's GRID Screen**
+- Mock step — create fake results for entities selected to screen
+- Capture # of Possible Matches
+- Capture # of Likely Matches (High Match Score)
+- List of risk categories for each match
+
+---
+
+▶️ **Step 7: Risk Scoring**
+- Run client and all other screened parties through risk scoring calculator for Likely Matches only
+- Calculate the overall risk score
+
+---
+
+▶️ **Step 8: Display Moody's GRID Screen Results and Risk**
+
+> ## Overall Risk Score: 🔴 High / 🟠 Medium / 🔘 Low
+
+| Name (ID) | Risk Score | Relationship | Possible Matches | Likely Matches | Likely Match Risk Events |
+|---|---|---|---|---|---|
+| 🔷 Client Name (ID) | 🔴/🟠/🔘 | Client | # | # | e.g. MLA, PEP, TER |
+| 🔹 Party Name (ID) | 🔴/🟠/🔘 | e.g. Ultimate Parent | # | # | e.g. FRD, BRB |
+
+---
+
+### Appendix
+
+#### A. Display Preferences
+- **Risk Scores:** 🔴 High, 🟠 Medium, 🔘 Low
+- **Client Indicator:** 🔷 next to client name
+- **Related Party Indicator:** 🔹 next to party name
+- **Added Party Indicator:** ➕ before 🔹 for `was_added: true`
+
+#### B. Risk Score Calculation
+
+| Tier | Points Each | Codes |
+|---|---|---|
+| Critical | 10 | BLK, BRB, BUS, DEN, FOF, FOS, FRD, IRC, MLA, ORG, PEP, REG, SEC, SEX, SNX, TER, WLT |
+| Valuable | 5 | CFT, CYB, DTF, ENV, FUG, GAM, HUM, IMP, KID, LMD, LNS, MOR, MSB, MUR, OBS, PRJ, RES, SMG, SPY, TAX, TFT, TRF, VCY |
+| Investigative | 3 | ARS, AST, BUR, CON, DPS, FOR, IGN, PSP, ROB |
+| Probative | 1 | ABU, CPR, IPR, MIS, NSC |
+| Theoretical Maximum | | 317 |
+
+- **Related party score:** (raw ÷ 317) × 100
+- **Group score:** max(client score, highest related party score) + log(n) × modifier (5–10), capped at 100
+- **Risk Levels:** 🔴 High = 67–100, 🟠 Medium = 34–66, 🔘 Low = 0–33
+
+#### C. Hardcoded Party IDs
+US770430924, IT05258270965, CA262471793L, US301253519L, US367502969L, IE422973, US322708589L, FR432778108, KR1101111934151, DE2012367927, US133434736L, NL71993312, JP5010401066923, US374654210L, SG200310706N, ESB82913807, BE0889852462, US042958132, US280132859L, GB13047869, ESB95630034, GB12037643, CHCHE262723657, CHCHE205764206, GB03726028, AU086288888, DE2012676509, GB04151418, KR1101140217833
