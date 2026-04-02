@@ -1,0 +1,440 @@
+### Scope
+Complete AML/KYC initiation workflow triggered by natural language command (e.g., "Initiate AML/KYC for Acme Capital LLC"). Covers client lookup, corporate tree resolution, party scoping, conflicts-based risk screening via Moody's GRID, risk scoring, match acceptance, and ongoing monitoring setup.
+
+### Goals
+- Automate end-to-end AML/KYC initiation with minimal manual intervention
+- Ensure comprehensive corporate structure screening with user-controlled scope
+- Deliver risk-scored results with clear HIGH/MEDIUM/LOW event classification
+- Establish ongoing monitoring and schedule periodic reviews
+<!-- - Memorialize screening results with timestamped corporate structure documentation -->
+
+### Overall Behavior Rules
+- Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
+- **Step 6 may only be entered when the user explicitly types "RUN" at Step 5b. When the user selects options A–H at Step 5b, the workflow returns to Step 3 and must proceed sequentially through every subsequent step (Steps 3 → 4 → 5 → 5b) before stopping at Step 5b for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
+
+### Communication Preferences
+- **Execution mode:** Silent execution with minimal updates
+- **Status updates:** Don't display outside of friendly messages
+- **Preambles:** None - proceed directly to work
+- **Summaries:** No step-level summaries or confirmations. Proceed directly to the next step unless user input is required. Final summary only at the end of the full workflow.
+- **Tool/task visibility:** Do not display raw tool names, task counts, or execution details. Instead show a single friendly status line at each major milestone.
+- **Task list visibility:** Do not display task lists, task counts, or task progress indicators at any point during the workflow. Execute silently without surfacing the task plan to the user.
+- **Only display the friendly status messages defined in the table below for execution steps. Display steps have no status message — their output is the communication. Do not display any other status updates, confirmations, progress indicators, or commentary at any point during the workflow — including on loop iterations.**
+
+| Step | Friendly Status Message |
+|---|---|
+| 1 | 🔍 Looking up [Client Name]... |
+| 2 | 🌳 Finding corporate structure... |
+| 3–4 | 🔗 Identifying key corporate structure relationships... |
+| 6 | 🛡️ Running Moody's GRID screen... |
+| 7 | 📊 Calculating risk scores... |
+
+---
+
+### Workflow Steps
+
+▶️ **Step 1: Client Lookup**
+- Search system for existing client record by entity name
+- If not found: notify user and stop workflow
+- If found: retrieve full client profile and proceed
+
+---
+
+▶️ **Step 2: Find Client's Corporate Tree**
+- Get partyId of client
+- Call `get_party_corporate_family` using the client's partyId
+- Capture rootID for each ultimate owner of the client
+- Retain the full API response for use in Step 3
+- If no corporate tree root IDs exist: run third-party lookup and link to best match
+
+---
+
+▶️ **Step 3: Find Other Existing Intapp Parties in Corporate Tree(s)**
+
+Using the corporate tree response from Step 2:
+
+**Traverse the full corporate tree:**
+1. Start with the root company
+2. Traverse every node at every level including all nested `subCompanies` — do not skip any node regardless of whether it has a `partyId`
+3. For each node, check if it has a `partyId` field
+4. If a `partyId` exists, capture that entity — otherwise continue traversal
+
+**Determine the relationship** of each captured node to the client:
+- If the entity is the root: Ultimate Parent
+- If the entity is an ancestor of the client (between root and client): Parent
+- If the entity is a descendant of the client (in the client's `subCompanies` tree): Subsidiary
+- If the entity shares the same immediate parent as the client: Sibling
+
+Track each captured party:
+
+| Field | Value |
+|---|---|
+| `partyId` | Existing Intapp party ID |
+| `name` | Party name |
+| `relationship` | Ultimate Parent, Parent, Subsidiary, or Sibling |
+| `source` | `corporate_tree` |
+| `was_added` | `false` (pre-existing) |
+
+If Step 5b included any corporate tree relationship selections, resolve those entities and merge into the tracked party list. Deduplicate by partyId — only mark `was_added: true` if not pre-existing.
+
+**Sample Tree API Response and Expected Captured Parties**
+```
+{
+  name: "ROOT CORP",
+  partyId: "P001",        // ✅ Ultimate Parent
+  subCompanies: [
+    {
+      name: "HOLDING LLC",
+      partyId: null,      // ⏭️ skipped - no partyId
+      subCompanies: [
+        {
+          name: "ACME INC",
+          partyId: "P002", // ✅ Parent (ancestor of client)
+          subCompanies: [
+            {
+              name: "CLIENT",
+              partyId: "P003", // ✅ client node
+              subCompanies: [
+                {
+                  name: "SUB A",
+                  partyId: "P004", // ✅ Subsidiary
+                  subCompanies: []
+                },
+                {
+                  name: "SUB B",
+                  partyId: null,   // ⏭️ skipped - no partyId
+                  subCompanies: [
+                    {
+                      name: "DEEP SUB",
+                      partyId: "P005", // ✅ Subsidiary (under non-party parent)
+                      subCompanies: []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+};
+
+// Expected captured parties:
+// P001 - ROOT CORP  → Ultimate Parent
+// P002 - ACME INC   → Parent
+// P004 - SUB A      → Subsidiary
+// P005 - DEEP SUB   → Subsidiary (found under non-party SUB B)
+```
+
+**Behavior:**
+- Do not provide any narrative, commentary, or explanation unless explicitly instructed
+- Output only what is specified in each step
+
+---
+
+▶️ **Step 4: Find Other Existing Intapp Parties in Other Corporate Structure Relationships**
+
+Run Get board members, Get shareholders, and Get beneficial owners using the client's partyId (not rootId). Capture all nodes that have a partyId.
+
+Track each captured party:
+
+| Field | Value |
+|---|---|
+| `partyId` | Existing Intapp party ID if available, otherwise assign a unique mock ID in the format `US1FAKE001`, `US1FAKE002`, etc. (incrementing across all mock parties) |
+| `name` | Party name |
+| `relationship` | Management, Board, Shareholder, or Beneficial Owner |
+| `source` | `board`, `shareholders`, or `beneficial_owners` |
+| `was_added` | `false` (pre-existing) |
+
+If Step 5b included any corporate structure relationship selections, resolve those entities and merge into the tracked party list. Deduplicate by partyId — only mark `was_added: true` if not pre-existing. Merge all results into the tracked party list from Step 3.
+
+> ⚠️ **Mock limitation:** APIs for board members, shareholders, and beneficial owners do not currently expose partyIDs. For now, use real names where fetchable, or placeholder person names (not companies) if data is unavailable. Assign mock IDs in the format `US1FAKE001`, `US1FAKE002`, etc.
+
+**Behavior:**
+- Do not provide any narrative, commentary, or explanation unless explicitly instructed
+- Output only what is specified in each step
+
+---
+
+▶️ **Step 5: Display Client & Key Corporate Structure Relationships**
+
+**Title:** 🔷 Client Name (ID)
+**Subtitle:** Corporate Tree(s): Root Name 1 (ID), Root Name 2 (ID)
+
+| Party Name (ID) | Relationship(s) |
+|---|---|
+| **Root Name 1 (ID) Tree** — # key relationships out of # entities in tree | |
+| 🔹 Party Name (ID) | e.g. Ultimate Parent |
+| ➕ 🔹 Party Name (ID) | e.g. Subsidiary |
+| **Root Name 2 (ID) Tree** — # key relationships out of # entities in tree | |
+| 🔹 Party Name (ID) | e.g. Parent |
+| **Other Key Relationships** — # key relationships out of # total entities | |
+| 🔹 Party Name (ID) | e.g. Shareholder, Beneficial Owner |
+| ➕ 🔹 Party Name (ID) | e.g. Board Member |
+
+> ℹ️ Key relationships are determined when they are existing Intapp parties
+> ➕ Indicates party was added during this workflow
+
+**Behavior:**
+- Only include a party in the table if they have an existing Intapp party record or `was_added: true`
+- Display all applicable relationships per party, comma-separated if multiple (e.g. Shareholder, Beneficial Owner)
+- Show ➕ before 🔹 for any party where `was_added: true`
+- Do not provide any narrative or description before or after the table — the title, subtitle, and table are the complete output for this step
+
+---
+
+▶️ **Step 5b: Prompt User to Add More Key Corporate Structure Relationships to Screen**
+
+**Resolving Options**
+
+Before rendering, independently resolve the full set of entities for each option (A–H) from the corporate tree and relationship data. A single entity (node) may appear in multiple options — this is expected and correct. Each option is evaluated in isolation.
+
+For each option, compute:
+- **Total** = total number of distinct entities this option resolves
+- **Included** = number of those entities already present in the tracked party list (matched by `partyId`)
+
+The definition of "included" depends on which entry this is:
+- **First entry:** An entity counts as Included if it already has a `partyId` (is a pre-existing Intapp party)
+- **Subsequent entries:** An entity counts as Included if it has a `partyId` (pre-existing) OR was added during this workflow (`was_added: true`)
+
+| State | Condition | Format |
+|---|---|---|
+| **Selectable** | Included < Total and Total > 0 | `X  ➕ **Label** (Included of Total included)` |
+| **Suppressed** | Included = Total, OR Total = 0 | `&nbsp;&nbsp;&nbsp;✅ **Label** (Total of Total included)` |
+
+The option letter is always absent for suppressed options. ➕ and ✅ are mutually exclusive — never show both. Always show the (X of Y included) count regardless of state. Render the options list as plain text — do not wrap in a fenced code block.
+
+> 💡 **Example:** If option C resolves 3 entities and 2 are already included, display: `C  ➕ **All Client's Parents** (2 of 3 included)`. If all 3 are included, suppress it: `&nbsp;&nbsp;&nbsp;✅ **All Client's Parents** (3 of 3 included)`.
+
+**➕ Add More Key Corporate Structure Relationships**  
+A  ➕ **Ultimate Parent** (0 of 2 included)  
+B  ➕ **Client's Immediate Parent** (0 of 1 included)  
+C  ➕ **All Client's Parents** (0 of 3 included)  
+   ✅ **All Client's Immediate Subsidiaries** (2 of 2 included)  
+E  ➕ **All Management** (0 of 4 included)  
+F  ➕ **All Board Members** (0 of 3 included)  
+G  ➕ **Shareholders w/ known ownership ≥10%** (0 of 5 included)  
+H  ➕ **Beneficial Owners w/ known ownership ≥10%** (0 of 3 included)  
+
+**Prompt:** *Type one or more options to add relationships (e.g. A B C) OR type "RUN" to proceed to Moody's GRID screening of client and existing key corporate structure entities.*
+
+**Behavior:**
+- **Auto-add on first entry:** On first entry to Step 5b, check `auto_add_relationships` in Configuration. If any values are set, resolve and merge those entities into the tracked party list before evaluating option states and rendering the list. Only set `was_added: true` for entities that do not already have a `partyId` (i.e. are not pre-existing Intapp parties). The corresponding options will appear suppressed (✅) if fully covered, or selectable (➕) if partially covered.
+- **Re-evaluate on every entry:** Each time Step 5b is reached — including after a user selects options and returns from Step 3 — re-resolve all options A–H from scratch and recompute Included/Total counts against the current tracked party list. Apply the correct Selectable or Suppressed state to each option before rendering. The list reflects the latest state of the tracked party list at that moment.
+- **Wait for input:** Do not advance until the user responds. This applies every time Step 5b is reached.
+- **On valid option selection:** If the user types one or more valid options from the currently selectable set, resolve each option's entities and merge any not already present into the tracked party list. Only set `was_added: true` for entities that do not already have a `partyId`. Then return to Step 3. Treat it as a continuation of the current workflow — do not re-plan, re-announce, or display a new task list. Resume silently from Step 3 and proceed sequentially through Steps 3 → 4 → 5 → 5b before stopping for input again.
+- **On "RUN":** If the user types "RUN" (case insensitive), default to screening all entities and go to Step 6. Do not proceed to Step 6 until the user types "RUN".
+- Only **Selectable** options may be typed by the user.
+
+
+---
+
+▶️ **Step 6: Run Moody's GRID Screen**
+- This is a mock step - no API support now
+- Create fake results for entities selected to screen
+- Capture # of Possible Matches
+- Capture # of Likely Matches (High Match Score)
+- List of risk categories (see risk scoring) for each match
+
+---
+
+▶️ **Step 7: Risk Scoring**
+- Run client and all other screened parties through risk scoring calculator for Likely Matches only
+- Calculate the overall risk score
+
+---
+
+▶️ **Step 8: Display Moody's GRID Screen Results and Risk**
+
+> ## Overall Risk Score: 🔴 High / 🟠 Medium / 🔘 Low
+
+| Name (ID) | Risk Score | Relationship | Possible Matches | Likely Matches | Likely Match Risk Events |
+|---|---|---|---|---|---|
+| 🔷 Client Name (ID) | 🔴 High / 🟠 Medium / 🔘 Low | Client | # | # | e.g. MLA, PEP, TER |
+| 🔹 Party Name (ID) | 🔴 High / 🟠 Medium / 🔘 Low | e.g. Ultimate Parent | # | # | e.g. FRD, BRB |
+| 🔹 Party Name (ID) | 🔴 High / 🟠 Medium / 🔘 Low | e.g. Subsidiary | # | # | — |
+
+> ℹ️ [Brief explanation of the major contributing factors to the overall risk score, focused on the highest-impact risk events across the client and related parties.]
+
+**Behavior:** Always display the client in the first row. Sort remaining parties by risk score high to low. Use — for parties with no likely match risk events.
+
+---
+
+### Appendix
+
+#### A. Display Preferences
+
+- **Risk Scores:** 🔴 High (red text), 🟠 Medium (orange text), 🔘 Low (grey text)
+- **Moody's Event Category Code Severity Text Color:** Critical=Red, Valuable=Orange, Investigative=Yellow, Probative=Grey
+- **Client Indicator:** Add 🔷 next to the client name whenever shown in playbook
+- **Related Party Indicator:** 🔹 next to the party name whenever shown in playbook (related party to the client from the corporate tree or any other corporate structure type)
+- **Added Party Indicator:** ➕ before 🔹 for any party where `was_added: true`
+
+---
+
+#### B. Risk Score Calculation
+
+**Tiers & Point Values**
+
+| Tier | Points Each | Max | Codes |
+|---|---|---|---|
+| Critical | 10 | 170 | BLK, BRB, BUS, DEN, FOF, FOS, FRD, IRC, MLA, ORG, PEP, REG, SEC, SEX, SNX, TER, WLT |
+| Valuable | 5 | 115 | CFT, CYB, DTF, ENV, FUG, GAM, HUM, IMP, KID, LMD, LNS, MOR, MSB, MUR, OBS, PRJ, RES, SMG, SPY, TAX, TFT, TRF, VCY |
+| Investigative | 3 | 27 | ARS, AST, BUR, CON, DPS, FOR, IGN, PSP, ROB |
+| Probative | 1 | 5 | ABU, CPR, IPR, MIS, NSC |
+| **Theoretical Maximum** | | **317** | |
+
+**Scoring Method**
+
+- **Related party score:** Sum points for all flagged codes. Normalize: (raw score ÷ 317) × 100 = score (0–100)
+- **Client score:** Same method as related parties. Calculated and displayed separately from the group score
+- **Group score:** max(client score, highest related party score) + log(n) × modifier, where n = number of related parties with any flags and modifier = 5–10 (tunable). Cap at 100
+
+**Risk Levels**
+
+| Level | Range |
+|---|---|
+| 🔴 High (red text) | 67–100 |
+| 🟠 Medium (orange text) | 34–66 |
+| 🔘 Low (grey text) | 0–33 |
+
+Applied independently to client score, each related party score, and group score.
+
+**Core Rules**
+- All code additions are additive only — no code can reduce a score
+- A lower-tier flag never offsets a higher-tier one
+- Adding related parties never reduces group risk
+- Client score and group score are always displayed separately
+
+**Display / Communication Guidelines**
+- Do not show the detailed math of the calculation
+- Only provide high-level information focused on the client and related party event categories that significantly increase overall risk
+- Keep commentary targeted to the most influential risk events
+
+---
+
+#### C. Event Category Codes
+
+| Code | Description |
+|------|-------------|
+| ABU | Abuse (Domestic, Elder, Child) |
+| ARS | Arson |
+| AST | Assault, Battery |
+| BLK | Firm Specific Blocked List |
+| BRB | Bribery, Graft, Kickbacks, Political Corruption |
+| BUR | Burglary |
+| BUS | Business Crimes (Antitrust, Bankruptcy, Price Fixing) |
+| CFT | Counterfeiting, Forgery |
+| CON | Conspiracy (no specific crime named) |
+| CPR | Copyright Infringement (Intellectual Property, Electronic Piracy) |
+| CYB | Computer Related, Cyber Crime |
+| DEN | Denied Entity |
+| DPS | Possession of Drugs or Drug Paraphernalia |
+| DTF | Trafficking or Distribution of Drug |
+| ENV | Environmental Crimes (Poaching, Illegal Logging, Animal Cruelty) |
+| FOF | Former OFAC List |
+| FOR | Forfeiture |
+| FOS | Former Sanctions |
+| FRD | Fraud, Scams, Swindles |
+| FUG | Fugitive, Escape |
+| GAM | Illegal Gambling |
+| HUM | Human Rights, Genocide, War Crimes |
+| IGN | Possession or Sale of Guns, Weapons and Explosives |
+| IMP | Identity Theft, Impersonation |
+| IPR | Illegal Prostitution |
+| IRC | Iran Connect* |
+| KID | Kidnapping, Abduction, Held Against Will |
+| LMD | Legal Marijuana Dispensaries* |
+| LNS | Loan Sharking, Usury, Predatory Lending |
+| MIS | Misconduct |
+| MLA | Money Laundering |
+| MOR | Mortgage Related |
+| MSB | Money Services Business |
+| MUR | Murder, Manslaughter (Committed, Planned or Attempted) |
+| NSC | Nonspecific Crime |
+| OBS | Obscenity Related, Child Pornography |
+| ORG | Organized Crime, Criminal Association, Racketeering |
+| PEP | Politically Exposed Person |
+| PRJ | Perjury, Obstruction of Justice, False Filings, False Statements |
+| PSP | Possession of Stolen Property |
+| REG | Regulatory Action |
+| RES | Real Estate Actions |
+| ROB | Robbery (Stealing by Threat, Use of Force) |
+| SEC | SEC Violations (Insider Trading, Securities Fraud) |
+| SEX | Sex Offenses (Rape, Sodomy, Sexual Abuse, Pedophilia) |
+| SMG | Smuggling (Does not include Drugs, Money, People or Guns) |
+| SNX | Sanctions Connect* |
+| SPY | Spying (Treason, Espionage) |
+| TAX | Tax Related Offenses |
+| TER | Terrorist Related |
+| TFT | Theft (Larceny, Misappropriation, Embezzlement, Extortion) |
+| TRF | People Trafficking, Organ Trafficking |
+| VCY | Virtual Currency* |
+| WLT | Watchlisted Entities |
+
+*Denotes connect/special category
+
+#### Hardcoded Part IDs
+
+We know these are existing partyIDs - supplement these since our APIs don't currently return everything:
+US770430924, IT05258270965, CA262471793L, US301253519L, US367502969L, IE422973, US322708589L, FR432778108, KR1101111934151, DE2012367927, US133434736L, NL71993312, JP5010401066923, US374654210L, SG200310706N, ESB82913807, BE0889852462, US042958132, US280132859L, GB13047869, ESB95630034, GB12037643, CHCHE262723657, CHCHE205764206, GB03726028, AU086288888, DE2012676509, GB04151418, KR1101140217833
+---
+
+<!--
+#### D. Future / Aspirational: Step 5b/5c Widget Approach
+
+ORIGINAL Step 5b and 5c using ask_user_question widget — commented out for later implementation once API support is available.
+
+**🔍 Run Moody's GRID Screen**
+
+| Option | Label | Action |
+|---|---|---|
+| I | 🔷 Client and 🔹 Key Relationships (# Entities) | Go to Step 6 and screen all entities |
+| J | 🔷 Client Only (1 Entity) | Go to Step 6 and screen only the client |
+
+**Prompt:** *Type one or more options (e.g. I, or A B C) and press Enter.*
+
+**Behavior:** If the user selects I or J, proceed to Step 6. If the user selects any of A–H (alone or in combination), create parties from selection with the provider ID on the party, then restart Step 4. Multiple add options can be combined in a single response.
+
+> ⚠️ **Mock limitation:** Party creation from corporate structure selections is not yet supported by the API. Newly selected relationships cannot be created as Intapp parties at this time — this step is aspirational and will be re-run once API support is available.
+
+**Step 5b: Prompt user to run screen or add more relationships**
+
+**Tool:** `ask_user_question`
+**Question:** Which entities should be included in the Moody's GRID risk screening?
+
+| Option | ID | Label | Action |
+|---|---|---|---|
+| A | `full` | 🔷 Client and 🔹 Key Relationships (# Entities) | Go to Step 6 and screen all entities |
+| B | `client_only` | 🔷 Client Only (1 Entity) | Go to Step 6 and screen only the client |
+| C | `wait` | ✏️ Wait and Add More Key Relationships | Go to Step 5c |
+
+> ℹ️ Entity count in option A reflects the client plus all key relationships already identified.
+
+**Step 5c: Add More Key Relationships**
+
+**Tool:** `ask_user_question`
+**Selection Type:** Multi-select
+**Question:** What other corporate structure relationships would you like to screen on Moody's GRID as a key relationship to the client?
+
+| Option | ID | Label | Result |
+|---|---|---|---|
+| 1 | `ultimate_parent` | Ultimate Parent | Add all the client's ultimate owners from corporate trees |
+| 2 | `immediate_parent` | Client's Immediate Parent | Add the client's immediate owners from corporate trees |
+| 3 | `all_parents` | All Client's Parents | Add all the client's immediate and indirect parents up to ultimate owner from corporate trees |
+| 4 | `direct_subsidiaries` | All Client's Immediate Subsidiaries | Add all the client's immediate subsidiaries from corporate trees |
+| 5 | `all_management` | All Management | Add all the client's management, distinguished by title |
+| 6 | `all_board` | All Board Members | Add all the client's board members, distinguished by title |
+| 7 | `shareholders` | All Shareholders w/ known ownership at or above 10% | Add all shareholders where ownership is available and at or above 10% |
+| 8 | `beneficial_owners` | All Beneficial Owners w/ known ownership at or above 10% | Add all beneficial owners where ownership is available and at or above 10% |
+
+**Buttons:**
+
+| Button | ID | Display Condition | Action |
+|---|---|---|---|
+| ✅ Add Key Relationships | `confirm` | Show only when ≥ 1 option is selected | Create parties from selection with the provider ID on the party, then restart Step 4 |
+| ❌ Cancel | `cancel` | Always visible | Restart Step 4 |
+
+> ⚠️ **Mock limitation:** Party creation from corporate structure selections is not yet supported by the API. Newly selected relationships cannot be created as Intapp parties at this time — this step is aspirational and will be re-run once API support is available.
+-->
