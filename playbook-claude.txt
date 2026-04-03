@@ -10,6 +10,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 <!--
 ### Playbook Variables
 - [reqType] = "AML/KYC - Moody's GRID"
+- [reqID] = set by playbook
 - [reqRefParty] = "Party"
 - [reqRefGrid] = "Custom GRID
   - [reqRefGridName] = "Name"
@@ -18,6 +19,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - [reqRefGridPosssibleMatch] = "Possible Matches"
   - [reqRefGridLikelyMatch] = "Likely Matches"
   - [reqRefGridLikelyMatchRiskEvent] = "Likely Matches Risk Events"
+- [conflictsID] = set by playbook
 - [conflictsAffCorpStructureRelationship] = "corpStructure"
 - [conflictsAffParty] = "CLNT"
 -->
@@ -112,6 +114,14 @@ If Step 5b included any corporate structure relationship selections, resolve tho
 > ⚠️ **Mock limitation:** APIs for board members, shareholders, and beneficial owners do not currently expose partyIDs. For now, use real names where fetchable, or placeholder person names (not companies) if data is unavailable. Assign mock IDs in the format `US1FAKE001`, `US1FAKE002`, etc.
 
 ---
+<!--
+
+▶️ **Step #: Create Request (optional)**
+
+
+---
+
+-->
 
 ▶️ **Step 5: Display Client & Key Corporate Structure Relationships**
 
