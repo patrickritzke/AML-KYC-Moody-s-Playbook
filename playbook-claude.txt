@@ -18,6 +18,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - [reqRefGridPosssibleMatch] = "Possible Matches"
   - [reqRefGridLikelyMatch] = "Likely Matches"
   - [reqRefGridLikelyMatchRiskEvent] = "Likely Matches Risk Events"
+- [conflictsAffCorpStructureRelationship] = "corpStructure"
+- [conflictsAffParty] = "CLNT"
 -->
 
 ### Overall Behavior Rules
@@ -159,6 +161,24 @@ Options:
 For each entity selected by the user that is not already an Intapp party, call `intapp:create_party` to create it before returning to Step 3. Once all new parties are created, loop back to Step 3 — the standard party detection logic will pick them up automatically on the next pass.
 ---
 
+<!--
+
+▶️ **Step 6: Run Moody's GRID Screen**
+
+---
+
+▶️ **Step 6a: Run Moody's GRID Screen via Request Conflicts Workflow Step
+
+---
+
+▶️ **Step 6b: Run Moody's GRID Screen via Conflicts linked to Request
+
+---
+
+▶️ **Step 6c: Run Moody's GRID Screen via standalone Conflicts
+
+-->
+
 ▶️ **Step 6: Run Moody's GRID Screen**
 - Mock step — create fake results for entities selected to screen
 - Capture # of Possible Matches
@@ -206,5 +226,3 @@ For each entity selected by the user that is not already an Intapp party, call `
 - **Group score:** max(client score, highest related party score) + log(n) × modifier (5–10), capped at 100
 - **Risk Levels:** 🔴 High = 67–100, 🟠 Medium = 34–66, 🔘 Low = 0–33
 
-#### C. Hardcoded Party IDs
-US770430924, IT05258270965, CA262471793L, US301253519L, US367502969L, IE422973, US322708589L, FR432778108, KR1101111934151, DE2012367927, US133434736L, NL71993312, JP5010401066923, US374654210L, SG200310706N, ESB82913807, BE0889852462, US042958132, US280132859L, GB13047869, ESB95630034, GB12037643, CHCHE262723657, CHCHE205764206, GB03726028, AU086288888, DE2012676509, GB04151418, KR1101140217833
