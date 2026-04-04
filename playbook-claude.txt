@@ -61,29 +61,31 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 ### Workflow Steps
 
 ▶️ **Step 1: Client Lookup**
+
+- Pre-step (Chrome init):
+  - If {useChromeMCP}:
+    - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
+    - If the call fails: set {useChromeMCP} = FALSE
+    - If the call succeeds: note whether a {yourhost} tab is active (used below if search fails)
 - Search system for existing client record by entity name
 - If not found: notify user and stop workflow
 - If found: 
   - Set {clientPartyId} variable
   - retrieve full client profile and proceed
 - If not found:
-  - If {useChromeMCP}:
-    - Attempt `tabs_context_mcp` to check if a {yourhost} tab is active
-    - If the tool call fails, set {useChromeMCP} = FALSE and skip Chrome steps
-    - If the tool call succeeds but no {yourhost} tab is active: fall through to "no tab" branch below
-    - If the tool call succees and {yourhost} tab is active
-      - Read the active tab page contents
-      - Identify up to 10 party names on the page (prioritize those in `Name (ID)` format)
-      - If any are identified, present them as a lettered list in this exact format:
+  - If {useChromeMCP} AND a {yourhost} tab was found active
+    - Read the active tab page contents
+    - Identify up to 10 party names on the page (prioritize those in `Name (ID)` format)
+    - If any are identified, present them as a lettered list in this exact format:
 
-        > *I see you're working on [description of page]. Would you like to run AML/KYC on any of these parties?*
-        >
-        > - **A** — Party Name (ID)
-        > - **B** — Party Name (ID)
-        > - **C** — Party Name (ID)
-        > - *(up to 10 options)*
+      > *I see you're working on [description of page]. Would you like to run AML/KYC on any of these parties?*
+      >
+      > - **A** — Party Name (ID)
+      > - **B** — Party Name (ID)
+      > - **C** — Party Name (ID)
+      > - *(up to 10 options)*
 
-      - Wait for user to type a letter to select a party, then proceed with that party
+  - Wait for user to type a letter to select a party, then proceed with that party
 - Else
   - Return: *I could not find that party on the system.*
   - Stop workflow
