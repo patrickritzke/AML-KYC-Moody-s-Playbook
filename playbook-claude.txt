@@ -61,7 +61,12 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - Call `get_client_profile` using the client's partyId to retrieve `corporateTrees`
 - From the response, capture the `rootCompanyId` for each corporate tree
 - Retain the root IDs for use in Step 3
-- If no corporate tree root IDs exist: run third-party lookup and link to best match
+- If corporate tree root IDs exist 
+  - If a Chrome browser navigation tool is connected and available, navigate to:
+    - URL: https://{appHost}/app/app/index.html#/corporate-tree?partyId={partyId}...
+    -USE the PARTY ID and not the root IDs
+  -  Else If no such tool is available, skip this step without comment or error.
+- Else If no corporate tree root IDs exist: run third-party lookup and link to best match
 
 ---
 
