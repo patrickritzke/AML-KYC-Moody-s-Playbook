@@ -71,7 +71,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - Set {clientPartyExternalIdProvider} to the provider that matches the tree source
   - Set {clientPartyExternalId} variable to the Id on the client party profile - use the one that corresponds to {clientPartyExternalIdProvider}
   - If a Chrome browser navigation tool is connected and available, navigate to:
-    - URL: https://{appHost}/app/app/index.html#/corporate-tree?partyId={clientPartyId}&ExternalId=clientPartyExternalId}&ProviderType={clientPartyExternalIdProvider}
+    - URL: https://{appHost}/app/app/index.html#/corporate-tree?partyId={clientPartyId}&externalId=clientPartyExternalId}&providerType={clientPartyExternalIdProvider}
     - USE the PARTY ID and not the root IDs
   -  Else If no such tool is available, skip this step without comment or error.
 - Else If no corporate tree root IDs exist: run third-party lookup and link to best match
