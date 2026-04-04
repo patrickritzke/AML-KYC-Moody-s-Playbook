@@ -9,19 +9,20 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 <!--
 ### Playbook Variables
-- [reqType] = "AML/KYC - Moody's GRID"
-- [reqID] = set by playbook
-- [reqRefParty] = "Party"
-- [reqRefGrid] = "Custom GRID
-  - [reqRefGridName] = "Name"
-  - [reqRefGridRiskScore] = "Risk Score"
-  - [reqRefGridRelationship] = "Relationship"
-  - [reqRefGridPosssibleMatch] = "Possible Matches"
-  - [reqRefGridLikelyMatch] = "Likely Matches"
-  - [reqRefGridLikelyMatchRiskEvent] = "Likely Matches Risk Events"
-- [conflictsID] = set by playbook
-- [conflictsAffCorpStructureRelationship] = "corpStructure"
-- [conflictsAffParty] = "CLNT"
+- [yourhost] = "shalaka2-sand.opensandbox2.intapp.com"
+- {reqType} = "AML/KYC - Moody's GRID"
+- {reqID} = set by playbook
+- {reqRefParty} = "Party"
+- {reqRefGrid} = "Custom GRID
+  - [reqRefGridName} = "Name"
+  - [reqRefGridRiskScore} = "Risk Score"
+  - [reqRefGridRelationship} = "Relationship"
+  - [reqRefGridPosssibleMatch} = "Possible Matches"
+  - [reqRefGridLikelyMatch} = "Likely Matches"
+  - [reqRefGridLikelyMatchRiskEvent} = "Likely Matches Risk Events"
+- {conflictsID} = set by playbook
+- {conflictsAffCorpStructureRelationship} = "corpStructure"
+- {conflictsAffParty} = "CLNT"
 -->
 
 ### Overall Behavior Rules
