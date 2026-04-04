@@ -63,14 +63,24 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - Set {clientPartyId} variable
   - retrieve full client profile and proceed
 - If not found:
-  - Return I could not find that party on the system
-  - If {useChromeMCP}
-    - If {yourhost} tab is active
-      - Access active tab page contents
-      - Identify possible party names on the page (prioritize those in name (id) format)
-      - If any are identified:
-        - Prompt: I see you are working [Description of Page]. Would you like to run AML/KYC on any of these parties related to your current task?
-          - Provide up to 10 options with A, B, C to continue with that party
+  - If {useChromeMCP}:
+    - Check if a {yourhost} tab is active
+    - If yes, read the active tab page contents
+    - Identify up to 10 party names on the page (prioritize those in `Name (ID)` format)
+    - If any are identified, present them as a lettered list in this exact format:
+
+      > *I see you're working on [description of page]. Would you like to run AML/KYC on any of these parties?*
+      >
+      > - **A** — Party Name (ID)
+      > - **B** — Party Name (ID)
+      > - **C** — Party Name (ID)
+      > - *(up to 10 options)*
+
+    - Wait for user to type a letter to select a party, then proceed with that party
+  - If no {yourhost} tab is active, or no parties are identified on the page:
+    - Return: *I could not find that party on the system.*
+    - Stop workflow
+
 
 ---
 
