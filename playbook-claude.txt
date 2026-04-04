@@ -7,7 +7,6 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - Deliver risk-scored results with clear HIGH/MEDIUM/LOW event classification
 - Establish ongoing monitoring and schedule periodic reviews
 
-<!--
 ### Playbook Variables
 - {yourhost} = "shalaka2-sand.opensandbox2.intapp.com"
 - {clientPartyId} = set by playbook
@@ -26,7 +25,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - {conflictsID} = set by playbook
 - {conflictsAffCorpStructureRelationship} = "corpStructure"
 - {conflictsAffParty} = "CLNT"
--->
+- {useChromeMCP} - TRUE
+  - if chrome connector is not available, then force this to FALSE
 
 ### Overall Behavior Rules
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
@@ -49,6 +49,9 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | 6 | 🛡️ Running Moody's GRID screen... |
 | 7 | 📊 Calculating risk scores... |
 
+### Chrome MCP Display Preferences
+- **Execution mode:** Silent execution with minimal updates
+
 ---
 
 ### Workflow Steps
@@ -59,6 +62,15 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - If found: 
   - Set {clientPartyId} variable
   - retrieve full client profile and proceed
+- If not found:
+  - Return I could not find that party on the system
+  - If {useChromeMCP}
+    - If {yourhost} tab is active
+      - Access active tab page contents
+      - Identify possible party names on the page (prioritize those in name (id) format)
+      - If any are identified:
+        - Prompt: I see you are working [Description of Page]. Would you like to run AML/KYC on any of these parties related to your current task?
+          - Provide up to 10 options with A, B, C to continue with that party
 
 ---
 
@@ -70,10 +82,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - If corporate tree root IDs exist 
   - Set {clientPartyExternalIdProvider} to the provider that matches the tree source
   - Set {clientPartyExternalId} variable to the Id on the client party profile - use the one that corresponds to {clientPartyExternalIdProvider}
-  - If a Chrome browser navigation tool is connected and available, navigate to:
-    - URL: https://{appHost}/app/app/index.html#/corporate-tree?partyId={clientPartyId}&externalId=clientPartyExternalId}&providerType={clientPartyExternalIdProvider}
-    - USE the PARTY ID and not the root IDs
-  -  Else If no such tool is available, skip this step without comment or error.
+  - If {useChromeMCP}
+    - Open https://{appHost}/app/app/index.html#/corporate-tree?partyId={clientPartyId}&externalId=clientPartyExternalId}&providerType={clientPartyExternalIdProvider}
 - Else If no corporate tree root IDs exist: run third-party lookup and link to best match
 
 ---
