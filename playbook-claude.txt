@@ -28,9 +28,9 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - [reqRefGridPosssibleMatch} = "Possible Matches"
   - [reqRefGridLikelyMatch} = "Likely Matches"
   - [reqRefGridLikelyMatchRiskEvent} = "Likely Matches Risk Events"
-- {conflictsID} = set by playbook
-- {conflictsAffCorpStructureRelationship} = "corpStructure"
-- {conflictsAffParty} = "CLNT"
+- {conID} = set by playbook
+- {relPartyConAff} = "corpStructure"
+- {clientPartyConAff} = "CLNT"
 - {useChromeMCP} — default TRUE
   - At workflow start, attempt to call `tabs_context_mcp` (or any Chrome MCP tool)
   - If the call succeeds: keep {useChromeMCP} = TRUE
@@ -244,11 +244,15 @@ For each entity selected by the user that is not already an Intapp party, call `
 
 -->
 
-▶️ **Step 6: Create Request**
+▶️ **Step 6: Create Request and Conflicts Screen**
 
 - Create a request with `intapp:create_request'
-  - See appendix for Body/XML details
+  - See appendix for API Body/XML details
   - Set variable {reqID}
+
+- Create a conflicts searched linked to the request with `intapp:create_conflicts_search'
+  -See appendix for API body details
+  -Link to request with {reqID}
 
 ---
 
@@ -358,3 +362,16 @@ For each entity selected by the user that is not already an Intapp party, call `
     </Question>
 </Grid>
 
+#### C. 'Intapp:create_conflicts_search' API Details
+
+##### API Body
+{
+  "name": "AML KYC - Moody's GRID Screen for {clientPartyName}",
+  "requestId": {reqID},
+  "searchTerms": [
+    { "affiliationType": {clientPartyConAff}, "name": {clientPartyName}, "partyId": {clientPartyId} },
+    { "affiliationType": {relPartyConAff},  {relPartyName[0]}, "partyId": {relPartyId[0]} },
+    { "affiliationType": {relPartyConAff},  {relPartyName[1]}, "partyId": {relPartyId[1]} }
+
+  ]
+}
