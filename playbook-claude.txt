@@ -12,10 +12,16 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - {clientPartyId} = set by playbook
 - {clientPartyExternalId} = set by playbook
 - {clientPartyExternalIdProvider} = set by playbook
+- {clientPartyName} = set by playbook
 - {reqType} = "AML/KYC - Moody's GRID"
 - {reqID} = set by playbook
 - {reqRefParty} = "Party"
-- {reqRefGrid} = "Custom GRID
+- {relPartyId[]} = set by playbook
+- {relPartyExternalId[]} = set by playbook
+- {relPartyExternalIdProvider[]} = set by playbook
+- {relPartyName[]} = set by playbook
+- {relPartyRelationship[]} = set by playbook
+- {reqRefGrid} = "grdMoodysScreening"
   - [reqRefGridName} = "Name"
   - [reqRefGridRiskScore} = "Risk Score"
   - [reqRefGridRelationship} = "Relationship"
@@ -70,7 +76,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - Search system for existing client record by entity name
 - If not found: notify user and stop workflow
 - If found: 
-  - Set {clientPartyId} variable
+  - Set variable: {clientPartyId}, {clientPartyName}
   - retrieve full client profile and proceed
 - If not found:
   - If {useChromeMCP} AND a {yourhost} tab was found active
@@ -132,6 +138,13 @@ Track each captured party:
 | `relationship` | Ultimate Parent, Parent, Subsidiary, or Sibling |
 | `source` | `corporate_tree` |
 | `was_added` | `false` (pre-existing) |
+
+**Set Variable Array
+- {relPartyId[]}
+- {relPartyName[]}
+- {relPartyExternalId[]}
+- {relPartyExternalIdProvider[]}
+- {relPartyRelationship[]}
 
 If Step 5b included any corporate tree relationship selections, resolve those entities and merge into the tracked party list. Deduplicate by partyId — only mark `was_added: true` if not pre-existing.
 
@@ -232,10 +245,16 @@ For each entity selected by the user that is not already an Intapp party, call `
 -->
 
 ▶️ **Step 6: Run Moody's GRID Screen**
-- Mock step — create fake results for entities selected to screen
-- Capture # of Possible Matches
-- Capture # of Likely Matches (High Match Score)
-- List of risk categories for each match
+
+- Create a request with `intapp:create_request'
+  - See appendix for Body/XML details
+  - Set variable {reqID}
+
+- Mock steps — create fake results for entities selected to screen
+  - Capture # of Possible Matches
+  - Capture # of Likely Matches (High Match Score)
+  - List of risk categories for each match
+
 
 ---
 
@@ -247,6 +266,7 @@ For each entity selected by the user that is not already an Intapp party, call `
 
 ▶️ **Step 8: Display Moody's GRID Screen Results and Risk**
 
+> Return Request Name (ID) w/ link to url https://{yourhost}/app/request.aspx?rid={reqId}
 > ## Overall Risk Score: 🔴 High / 🟠 Medium / 🔘 Low
 
 | Name (ID) | Risk Score | Relationship | Possible Matches | Likely Matches | Likely Match Risk Events |
@@ -277,4 +297,61 @@ For each entity selected by the user that is not already an Intapp party, call `
 - **Related party score:** (raw ÷ 317) × 100
 - **Group score:** max(client score, highest related party score) + log(n) × modifier (5–10), capped at 100
 - **Risk Levels:** 🔴 High = 67–100, 🟠 Medium = 34–66, 🔘 Low = 0–33
+
+#### C. 'Intapp:create_request' API Details
+
+##### API Body
+{
+  "workflowDefinitionName": "AML/KYC - Moody's GRID",
+  "name": "AML KYC - Moody's GRID for {clientPartyName}",
+  "answers": [
+    {
+      "questionName": {reqRefParty},
+      "partyLookupAnswer": {
+        "partyId": {clientPartyId},
+        "entityName": {clientPartyName},
+        "companyDetails": {
+          "companyName": {clientPartyName},
+          "primaryExternalDataProvider": {clientPartyExternalIdProvider},
+          "externalProviderIds": { {clientPartyExternalIdProvider}: {clientPartyExternalId} },
+        }
+      }
+    },
+    {
+      "questionName": {reqRefGrid},
+      "dataTableSimpleXmlAnswer": See Grid Question XML
+    }
+  ]
+}
+
+##### Grid Question XML 
+<Grid>
+  <GridRow>
+    <RowId>0</RowId>
+    <Question>
+      <Name>{reqRefGridName}</Name>
+      <Value>
+        <PartyId>{relPartyId[0]}</PartyId>
+        <EntityName>{relPartyName[0]}</EntityName>
+      </Value>
+    </Question>
+    <Question>
+      <Name>{reqRefGridRelationship}</Name>
+      <Value>{relPartyRelationship[0]}</Value>
+    </Question>
+  </GridRow>
+ <GridRow>
+    <RowId>1</RowId>
+    <Question>
+      <Name>{reqRefGridName}</Name>
+      <Value>
+        <PartyId>{relPartyId[1]}</PartyId>
+        <EntityName>{relPartyName[1]}</EntityName>
+      </Value>
+    </Question>
+    <Question>
+      <Name>{reqRefGridRelationship}</Name>
+      <Value>{relPartyRelationship[1]}</Value>
+    </Question>
+</Grid>
 
