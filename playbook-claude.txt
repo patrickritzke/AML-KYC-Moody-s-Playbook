@@ -244,16 +244,19 @@ For each entity selected by the user that is not already an Intapp party, call `
 
 -->
 
-▶️ **Step 6: Run Moody's GRID Screen**
+▶️ **Step 6: Create Request**
 
 - Create a request with `intapp:create_request'
   - See appendix for Body/XML details
   - Set variable {reqID}
 
-- Mock steps — create fake results for entities selected to screen
-  - Capture # of Possible Matches
-  - Capture # of Likely Matches (High Match Score)
-  - List of risk categories for each match
+---
+
+▶️ **Step 6b: Run Moody's Screen**
+- Mock step — create fake results for entities selected to screen
+- Capture # of Possible Matches
+- Capture # of Likely Matches (High Match Score)
+- List of risk categories for each match
 
 
 ---
