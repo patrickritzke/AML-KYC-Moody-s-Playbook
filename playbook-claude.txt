@@ -7,12 +7,12 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - Deliver risk-scored results with clear HIGH/MEDIUM/LOW event classification
 - Establish ongoing monitoring and schedule periodic reviews
 
-### Playbook Variables
+---
 
 ### Playbook Variables
 
 #### Debug Mode
-- `{debug}` = TRUE if user input includes "with debug"
+- `{debug}` = `TRUE` if user input includes "with debug" — when `TRUE`, output a variable state block after every step using the format defined in the Debug section below
 
 #### Hardcoded
 - `{yourhost}` = `"shalaka2-sand.opensandbox2.intapp.com"`
@@ -28,22 +28,19 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - `{reqRefGridLikelyMatch}` = `"Likely Matches"`
   - `{reqRefGridLikelyMatchRiskEvent}` = `"Likely Matches Risk Events"`
 
----
-
 #### Client Party
+*Set in Step 1*
 - `{clientPartyId}` — Intapp party ID of the client
 - `{clientPartyName}` — Display name of the client
 - `{clientPartyExternalId}` — External ID of the client (e.g. Moody's GRID ID)
 - `{clientPartyExternalIdProvider}` — Provider that issued the external ID
 
----
-
 #### Corporate Tree
+*Set in Step 2a*
 - `{treeGUO[]}` — Array of `rootCompanyId`s, one per corporate tree found on the client profile
 
----
-
 #### Related Parties
+*Initialized at workflow start, populated in Steps 2c–2d*
 - `{relatedParties}` — Single object tracking all corporate structure relationships. Each key holds a count of all entities (`total`), a count of those already Intapp parties (`parties`), and the list of matched party records (`list`):
   ```
   {relatedParties} = {
@@ -57,7 +54,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   }
   ```
   - `list[]` entries: `{ partyId, partyName, externalId }`
-  - Increment `total` for every qualifying node regardless of party status
+  - Increment `total` for every qualifying node regardless of Intapp party status
   - Increment `parties` and append to `list` only when node has a matched Intapp party
 
 - `{relatedPartiesTable[]}` — Flattened, deduplicated array built in Step 2e for display and downstream use:
@@ -73,33 +70,55 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   ]
   ```
 
----
-
 #### Newly Created Parties
-- `{newlyCreatedParties[]}` — Flat array of `partyId` strings for parties created during this workflow run:
-  ```
-  {newlyCreatedParties[]} = []   // [ partyId, ... ]
-  ```
-
----
+*Initialized at workflow start, appended on each successful `intapp:create_party` call in Step 4*
+- `{newlyCreatedParties[]}` = `[]` — flat array of `partyId` strings for parties created during this workflow run
 
 #### Request & Conflicts
+*Set in Step 5*
 - `{reqID}` — ID of the created request
 - `{conID}` — ID of the created conflicts search
 
+#### Runtime Flags
+*Set at workflow start*
+- `{useChromeMCP}` — `TRUE` if Chrome MCP is available; `FALSE` if unavailable or call fails. Evaluated once at startup and never re-evaluated.
+
 ---
 
-#### Runtime Flags
-- `{useChromeMCP}` — `TRUE` if Chrome MCP is available; `FALSE` if unavailable or call fails. Evaluated once at startup and never re-evaluated.
+### Debug Behavior
+- When `{debug}` = `TRUE`, output the following block after every step (even silent ones):
+
+  ```
+  🐛 DEBUG — Step [X]
+  clientPartyId:              [value]
+  clientPartyName:            [value]
+  clientPartyExternalId:      [value]
+  clientPartyExternalIdProvider: [value]
+  treeGUO[]:                  [value]
+  relatedParties.GUO:         { parties: #, total: #, list: [...] }
+  relatedParties.Parent:      { parties: #, total: #, list: [...] }
+  relatedParties.Subsidiary:  { parties: #, total: #, list: [...] }
+  relatedParties.Affiliate:   { parties: #, total: #, list: [...] }
+  relatedParties.Principal:   { parties: #, total: #, list: [...] }
+  relatedParties.Shareholder: { parties: #, total: #, list: [...] }
+  relatedParties.UBO:         { parties: #, total: #, list: [...] }
+  relatedPartiesTable[]:      [count] entries
+  newlyCreatedParties[]:      [value]
+  reqID:                      [value]
+  conID:                      [value]
+  useChromeMCP:               [value]
+  ```
+
+---
 
 ### Overall Behavior Rules
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
-- **Step 6 may only be entered when the user explicitly types "RUN" at Step 5b. When the user selects options A–H at Step 5b, the workflow returns to Step 3 and must proceed sequentially through every subsequent step (Steps 3 → 4 → 5 → 5b) before stopping at Step 5b for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
+- **Step 6 may only be entered when the user explicitly types "RUN" at Step 4. When the user selects options A–H at Step 4, the workflow returns to Step 2c and must proceed sequentially through every subsequent step (Steps 2c → 2d → 2e → 3 → 4) before stopping at Step 4 for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
 
 ### Communication Preferences
 - **Execution mode:** Silent execution with minimal updates
 - **Status updates:** Don't display outside of friendly messages
-- **Preambles:** None - proceed directly to work
+- **Preambles:** None — proceed directly to work
 - **Summaries:** No step-level summaries or confirmations. Proceed directly to the next step unless user input is required. Final summary only at the end of the full workflow.
 - **Tool/task visibility:** Do not display raw tool names, task counts, or execution details. Instead show a single friendly status line at each major milestone.
 - **Task list visibility:** Do not display task lists, task counts, or task progress indicators at any point during the workflow. Execute silently without surfacing the task plan to the user.
@@ -113,146 +132,101 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | 6 | 🛡️ Running Moody's GRID screen... |
 | 7 | 📊 Calculating risk scores... |
 
-### Chrome MCP Display Preferences
-- **Execution mode:** Silent execution with minimal updates
-
 ---
 
 ### Workflow Steps
 
-#### **Step 1: Find Party**
+#### ▶️ **Step 1: Find Party**
 
-####▶️ **Step 1a: Search Party**
-
-- Type: Processing
+##### ▶️ **Step 1a: Search Party**
 - Status Message: 🔍 Looking up [Party Name]...
-- Trigger: User Input
-- Inputs: Party Name (free text)
-- Substeps
-  - Identify party name from user input
-  - Search the system for existing party record by party name with `intapp:search_parties`
-  - If found
-    - Set variables {clientParty*}
-    - GO TO Step 2
-  - If not found, GO TO step 1b
+- Search the system for existing party record by party name with `intapp:search_parties`
+- If found:
+  - Set `{clientPartyId}`, `{clientPartyName}`, `{clientPartyExternalId}`, `{clientPartyExternalIdProvider}`
+  - **GO TO** Step 2
+- If not found → **GO TO** Step 1b
 
-####▶️ **Step 1b: Suggest Party**
-
-  - If {useChromeMCP}:
-    - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
-    - If the call fails:
-      - Set {useChromeMCP} = FALSE
-      - GO TO Step END
-    - If the call succeeds
-      - Determine if a {yourhost} tab is active
-      - If a {yourhost} tab was not found active
-        -GO TO Step END
-      -If a {yourhost} tab was found active
-        - Read the active tab page contents
-        - Detect up to 10 party names on the page (prioritize those in `Name (ID)` format)
-        - if no party names are detected
-          - GO TO Step End
-        - If party names are detected
-          - Present them as a lettered list in this exact format:
-            > *I see you're working on [description of page]. Would you like to run AML/KYC on any of these parties?*
-            >
-            > - **A** — Party Name (ID)
-            > - **B** — Party Name (ID)
-            > - **C** — Party Name (ID)
-            > - *(up to 10 options)*
-          - Wait for user to type a letter to select a party - then GO BACK TO Step 1a with that party name
+##### ▶️ **Step 1b: Suggest Party**
+- If `{useChromeMCP}`:
+  - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
+  - If the call fails:
+    - Set `{useChromeMCP}` = `FALSE`
+    - **GO TO** Step END
+  - If the call succeeds:
+    - Determine if a `{yourhost}` tab is active
+    - If no `{yourhost}` tab found → **GO TO** Step END
+    - If a `{yourhost}` tab is active:
+      - Read the active tab page contents
+      - Detect up to 10 party names on the page (prioritize those in `Name (ID)` format)
+      - If no party names detected → **GO TO** Step END
+      - If party names detected, present as a lettered list:
+        > *I see you're working on [description of page]. Would you like to run AML/KYC on any of these parties?*
+        >
+        > - **A** — Party Name (ID)
+        > - **B** — Party Name (ID)
+        > - *(up to 10 options)*
+      - Wait for user to type a letter → **GO BACK TO** Step 1a with that party name
 
 ---
 
-### ▶️ **Step 2: Identify Party Corporate Structure Relationships**
+#### ▶️ **Step 2: Identify Party Corporate Structure Relationships**
 
-#### ▶️ **Step 2a: Find Party's Corporate Tree**
-- Get partyId of client
-- Call `get_client_profile` using the {clientPartyId} to retrieve `corporateTrees`
+##### ▶️ **Step 2a: Find Party's Corporate Tree**
+- Status Message: 🌳 Finding corporate structure...
+- Call `get_client_profile` using `{clientPartyId}` to retrieve `corporateTrees`
 - From the response, capture the `rootCompanyId` for each corporate tree
-  - If not found
-    - GO TO Step END
-  - If found
-    - Set variable {treeGUO[]) for all found
-    - Set {clientPartyExternalIdProvider} to the provider that matches the tree source
-    - Set {clientPartyExternalId} variable to the Id on the client party profile - use the one that corresponds to {clientPartyExternalIdProvider}
-    - GO TO Step 2b
+  - If not found → **GO TO** Step END
+  - If found:
+    - Set `{treeGUO[]}` for all found root company IDs
+    - Set `{clientPartyExternalIdProvider}` to the provider that matches the tree source
+    - Set `{clientPartyExternalId}` to the ID on the client party profile corresponding to `{clientPartyExternalIdProvider}`
+    - **GO TO** Step 2b
 
----
+##### ▶️ **Step 2b: Open Corporate Tree Page**
+- If `{useChromeMCP}`:
+  - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
+  - If the call fails:
+    - Set `{useChromeMCP}` = `FALSE`
+    - **GO TO** Step 2c
+  - If the call succeeds:
+    - If no `{yourhost}` tab found → **GO TO** Step 2c
+    - If a `{yourhost}` tab is active:
+      - Open `https://{yourhost}/app/app/index.html#/corporate-tree?partyId={clientPartyId}&externalId={clientPartyExternalId}&providerType={clientPartyExternalIdProvider}`
+      - **GO TO** Step 2c
+- **GO TO** Step 2c
 
-#### ▶️ **Step 2b: Open Corporate Tree Page**
-  - If {useChromeMCP}:
-    - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
-    - If the call fails:
-      - Set {useChromeMCP} = FALSE
-      - GO TO Step 2c
-    - If the call succeeds
-      - Determine if a {yourhost} tab is active
-      - If a {yourhost} tab was not found active
-        -GO TO Step 2c
-      -If a {yourhost} tab was found active
-        -Open https://{appHost}/app/app/index.html#/corporate-tree?partyId={clientPartyId}&externalId=clientPartyExternalId}&providerType={clientPartyExternalIdProvider}
-        -GO TO Step 2c
-  -GO To Step 2c
-
----
-
-#### ▶️ **Step 2c: Find Other Existing Intapp Parties in Corporate Tree(s)**
-- Initialize `{relatedParties}` as an empty object:
-  ```
-  {relatedParties} = {
-    GUO:        [],
-    Parent:     [],
-    Subsidiary: [],
-    Affiliate:  [],
-    Principal:  [],
-    Shareholder:[],
-    UBO:        []
-  }
-  ```
-- Initialize `{relatedEntitiesCount}` as a zero-value object (counts all tree nodes meeting each relationship, regardless of Intapp party status):
-  ```
-  {relatedEntitiesCount} = {
-    GUO:        0,
-    Parent:     0,
-    Subsidiary: 0,
-    Affiliate:  0,
-    Principal:  0,
-    Shareholder:0,
-    UBO:        0
-  }
-  ```
+##### ▶️ **Step 2c: Find Other Existing Intapp Parties in Corporate Tree(s)**
+- Status Message: 🔗 Identifying key corporate structure relationships...
+- Reset `{relatedParties}` to initial zero state (all keys: `{ parties: 0, total: 0, list: [] }`)
 - For each `{treeGUO[#]}` in `{treeGUO[]}`:
   - Call `intapp:get_corporate_tree` with:
     - `rootCompanyId` = `{treeGUO[#]}`
     - `providerType` = `{clientPartyExternalIdProvider}`
     - `properties` = `Parties`
-  - Recursively walk **all nodes** in the returned tree (the full tree is always returned, not just Intapp-matched nodes)
-  - For each node where `parties[]` is **non-empty**:
-    - For each `partyId` found in the node's `parties[]`:
-      - If `partyId` == `{clientPartyId}` → **skip**
-      - Otherwise, evaluate the node's structural relationship to `{clientPartyExternalId}` and append `{ partyId, partyName, externalId }` to the appropriate key(s) in `{relatedParties}` — **a node may qualify for more than one**:
+  - Recursively walk **all nodes** in the returned tree
+  - For every node, evaluate its structural relationship to `{clientPartyExternalId}` and update `{relatedParties}` accordingly:
 
-        | Condition | `{relatedParties}` key | `{relatedEntitiesCount}` key |
-        |---|---|---|
-        | Node is the root ultimate owner of the tree | `GUO` | `GUO` |
-        | Node is an **ancestor** of the client (client is nested somewhere in node's `subCompanies`) | `Parent` | `Parent` |
-        | Node is a **descendant** of the client (node is nested in client's `subCompanies`) | `Subsidiary` | `Subsidiary` |
-        | None of the above | `Affiliate` | `Affiliate` |
+    | Condition | `{relatedParties}` key |
+    |---|---|
+    | Node is the root ultimate owner of the tree | `GUO` |
+    | Node is an **ancestor** of the client (client is nested somewhere in node's `subCompanies`) | `Parent` |
+    | Node is a **descendant** of the client (node is nested in client's `subCompanies`) | `Subsidiary` |
+    | None of the above | `Affiliate` |
 
-      - Increment the matching `{relatedEntitiesCount}` key for **every** qualifying node, regardless of whether it has a `parties[]` match
-      - Only append to `{relatedParties}` if the node has a non-empty `parties[]` (and `partyId` != `{clientPartyId}`)
+  - For every qualifying node:
+    - Always increment `{relatedParties.[key].total}`
+    - If node has a non-empty `parties[]` AND `partyId` != `{clientPartyId}`:
+      - Increment `{relatedParties.[key].parties}`
+      - Append `{ partyId, partyName, externalId }` to `{relatedParties.[key].list}`
 
-- After processing all `{treeGUO[]}` trees, **de-duplicate** each key in `{relatedParties}` independently on `partyId`
+- After processing all trees, de-duplicate each `{relatedParties.[key].list}` on `partyId` and recalculate `{relatedParties.[key].parties}` to match
 - **GO TO** Step 2d
 
----
-
-#### ▶️ **Step 2d: Find Existing Intapp Parties in Other Corporate Structure Relationships**
+##### ▶️ **Step 2d: Find Existing Intapp Parties in Other Corporate Structure Relationships**
 
 > ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, generate plausible dummy data simulating what these calls would return, and populate `{relatedParties}` accordingly.
 
-- Using `{clientPartyId}`, simulate calls to the following (future) endpoints and append `{ partyId, partyName, externalId }` to the corresponding key in `{relatedParties}`:
+- Using `{clientPartyId}`, simulate calls to the following (future) endpoints:
 
   | (Future) API Call | `{relatedParties}` key |
   |---|---|
@@ -260,51 +234,35 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   | `intapp:get_shareholders` | `Shareholder` |
   | `intapp:get_ubos` | `UBO` |
 
-- For each simulated response, walk all returned nodes and:
-  - Increment the matching `{relatedEntitiesCount}` key for **every** node, regardless of party status
-  - Add any node with a non-empty `parties[]` to the appropriate key in `{relatedParties}`
-- De-duplicate each newly populated key in `{relatedParties}` on `partyId`
+- For each simulated response, walk all returned nodes:
+  - Always increment `{relatedParties.[key].total}`
+  - If node has a non-empty `parties[]`:
+    - Increment `{relatedParties.[key].parties}`
+    - Append `{ partyId, partyName, externalId }` to `{relatedParties.[key].list}`
+- De-duplicate each newly populated `list` on `partyId` and recalculate `parties` count to match
 - **GO TO** Step 2e
 
----
-
-#### ▶️ **Step 2e: Consolidate Related Parties into Summary Variable**
-
-- Flatten and deduplicate `{relatedParties}` into a single array `{relatedPartiesTable}`, one object per unique `partyId`, aggregating all relationship keys the party appears under:
-
+##### ▶️ **Step 2e: Consolidate Related Parties into Summary Variable**
+- Flatten and deduplicate all `{relatedParties.[key].list}` entries into `{relatedPartiesTable[]}`, one object per unique `partyId`, aggregating all relationship keys the party appears under:
   ```
-  {relatedPartiesTable} = [
+  {relatedPartiesTable[]} = [
     {
       partyId:       string,
       partyName:     string,
       externalId:    string,
-      relationships: string[],  // all {relatedParties} keys this partyId appears in
-      isNew:         boolean
-    },
-    ...
+      relationships: string[],   // all {relatedParties} keys this partyId appears in
+      isNew:         boolean      // true if partyId is in {newlyCreatedParties[]}
+    }
   ]
   ```
-
-- Counts are derived directly from `{relatedParties}` as needed in later steps — no separate count variables required:
-
-  | Count | Reference |
-  |---|---|
-  | Ultimate Parents | `len({relatedParties.GUO})` of `{relatedEntitiesCount.GUO}` |
-  | Parents | `len({relatedParties.Parent})` of `{relatedEntitiesCount.Parent}` |
-  | Subsidiaries | `len({relatedParties.Subsidiary})` of `{relatedEntitiesCount.Subsidiary}` |
-  | Affiliates | `len({relatedParties.Affiliate})` of `{relatedEntitiesCount.Affiliate}` |
-  | Principals | `len({relatedParties.Principal})` of `{relatedEntitiesCount.Principal}` |
-  | Shareholders | `len({relatedParties.Shareholder})` of `{relatedEntitiesCount.Shareholder}` |
-  | Beneficial Owners | `len({relatedParties.UBO})` of `{relatedEntitiesCount.UBO}` |
-  | **Total Unique Parties** | `len({relatedPartiesTable})` |
-
+- Set `isNew = true` for any `partyId` found in `{newlyCreatedParties[]}`
 - **GO TO** Step 3
 
 ---
 
-###▶️ **Step 3: Display Client & Key Corporate Structure Relationships**
+#### ▶️ **Step 3: Display Client & Key Corporate Structure Relationships**
 
-- Display the following to the user:
+Display the following to the user:
 
 ---
 
@@ -314,38 +272,32 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 | Party Name (ID) | Relationship(s) |
 |---|---|
-| *(for each entry in `{relatedPartiesTable}`)* | *(for each entry in `{relatedPartiesTable}`)* |
 | 🆕 🔹 `{partyName}` (`{partyId}`) *(if `isNew` = true)* | `{relationships[]}` comma-separated |
 | 🔹 `{partyName}` (`{partyId}`) *(if `isNew` = false)* | `{relationships[]}` comma-separated |
 
-- Below the table, display a relationship **coverage summary** using `{relatedEntitiesCount}` and `{relatedParties}`:
+*(one row per entry in `{relatedPartiesTable[]}`)*
 
-  > *Showing `len({relatedPartiesTable})` existing Intapp parties across the corporate structure.*
-  > *`{relatedEntitiesCount.Subsidiary}` subsidiaries found in tree — `len({relatedParties.Subsidiary})` matched to existing Intapp parties.*
-  > *(repeat for any relationship category where `{relatedEntitiesCount}` > 0)*
+Below the table, display a coverage summary — repeat for any relationship where `total` > 0:
+
+> *Showing `len({relatedPartiesTable[]})` existing Intapp parties across the corporate structure.*
+> *[Relationship label]: `{relatedParties.[key].parties}` of `{relatedParties.[key].total}` entities matched to existing Intapp parties.*
 
 - **GO TO** Step 4
 
 ---
 
-###▶️ **Step 4: Prompt User to Add More Key Corporate Structure Relationships to Screen**
+#### ▶️ **Step 4: Prompt User to Add More Key Corporate Structure Relationships to Screen**
 
-- Using `{relatedParties}` and `{relatedEntitiesCount}`, evaluate each relationship category below:
-  - Identify all **unique `externalId`s** that map to each relationship (an `externalId` may appear in multiple categories)
-  - For each relationship, determine:
-    - How many of the unique `externalId`s are **already an Intapp party** (`{relatedParties.*}`)
-    - How many **total** unique `externalId`s exist for that relationship (`{relatedEntitiesCount.*}`)
-  - When multiple root trees exist in `{treeGUO[]}`, aggregate unique `externalId`s across all trees per relationship
-
-- Categorize each relationship option and format accordingly:
+- For each relationship option below, evaluate using `{relatedParties}` and categorize:
 
   | Category | Criteria | Display Format |
   |---|---|---|
-  | **Addable** | At least one `externalId` is not yet an Intapp party | Option letter + name + `(X of Y included)` suffix |
-  | **Already Added** | All `externalId`s are already Intapp parties | No letter + ✅ + name + `(X of X included)` suffix |
-  | **Not Available** | No `externalId`s exist for this relationship | No letter + name + `(0 available)` suffix |
+  | **Addable** | `{relatedParties.[key].parties}` < `{relatedParties.[key].total}` | Option letter + name + `(X of Y included)` |
+  | **Already Added** | `{relatedParties.[key].parties}` == `{relatedParties.[key].total}` AND `total` > 0 | No letter + ✅ + name + `(X of X included)` |
+  | **Not Available** | `{relatedParties.[key].total}` == 0 | No letter + name + `(0 available)` |
 
-- Display the following prompt to the user:
+- Assign option letters sequentially (A, B, C...) to **Addable** rows only, skipping Already Added and Not Available rows
+- Display the following prompt:
 
 ---
 
@@ -353,76 +305,64 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 | | Relationship | Coverage |
 |---|---|---|
-| A | **Ultimate Parent** | *(X of Y included)* |
-| | ✅ **Client's Immediate Parent** | *(X of X included)* |
-| C | **All Client's Parents** | *(X of Y included)* |
-| D | **All Client's Immediate Subsidiaries** | *(X of Y included)* |
-| E | **All Management** | *(X of Y included)* |
-| | **All Board Members** | *(0 available)* |
-| G | **Shareholders w/ known ownership ≥10%** | *(X of Y included)* |
-| H | **Beneficial Owners w/ known ownership ≥10%** | *(X of Y included)* |
-
-> ⚠️ Option letters are assigned only to **Addable** relationships. Letters are assigned sequentially (A, B, C...) skipping Already Added and Not Available rows. The example letters above are illustrative — recalculate based on actual categorization at runtime.
+| *(letter or blank)* | **Ultimate Parent** | *(X of Y included / X of X included / 0 available)* |
+| *(letter or blank)* | **Client's Immediate Parent** | *(X of Y included / X of X included / 0 available)* |
+| *(letter or blank)* | **All Client's Parents** | *(X of Y included / X of X included / 0 available)* |
+| *(letter or blank)* | **All Client's Immediate Subsidiaries** | *(X of Y included / X of X included / 0 available)* |
+| *(letter or blank)* | **All Management** | *(X of Y included / X of X included / 0 available)* |
+| *(letter or blank)* | **All Board Members** | *(X of Y included / X of X included / 0 available)* |
+| *(letter or blank)* | **Shareholders w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
+| *(letter or blank)* | **Beneficial Owners w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
 
 ---
-
-- Initialize `{newlyCreatedParties[]}` as an empty array to track parties created in this step:
-  ```
-  {newlyCreatedParties[]} = []   // [ partyId, ... ]
-  ```
 
 - WAIT for user input:
   - If user types one or more option letters:
-    - For each selected relationship, identify all `externalId`s that are **not** yet an Intapp party
+    - For each selected relationship, identify all `externalId`s in `{relatedParties.[key].list}` that are **not** yet Intapp parties (i.e. not in any `list[]`)
     - For each non-party entity, call `intapp:create_party` to create it
       - On success, append `partyId` to `{newlyCreatedParties[]}`
       - On failure, note the error and continue with remaining entities
-    - Once all creation attempts → **GO BACK TO Step 2** and repeat each subsequent step including all PROMPT and WAIT actions
-  - If user types `RUN` → **GO TO Step 5**
+    - Once all creation attempts complete → **GO TO** Step 2c and proceed sequentially through Steps 2c → 2d → 2e → 3 → 4
+  - If user types `RUN` → **GO TO** Step 5
+
 ---
 
-▶️ **Step 5: Create Request and Conflicts Screen**
-
+#### ▶️ **Step 5: Create Request and Conflicts Screen**
 - Create a request with `intapp:create_request`
-  - See appendix for API Body/XML details
-  - Set variable {reqID}
-
-- Create a conflicts searched linked to the request with `intapp:create_conflicts_search`
-  -See appendix for API body details
-  -Link to request with {reqID}
-  -Set variable {conID}
-- Run conflicts search `intapp:run_conflicts_search` and {conID}
-
----
-
-###▶️ **Step 6: Run Moody's Screen**
-
-<!--
-- Mock step — create fake results for entities selected to screen
-- Capture # of Possible Matches
-- Capture # of Likely Matches (High Match Score)
-- List of risk categories for each match
--->
-
-- Get conflicts results with `intapp:run_conflicts_results' for {conID}
-- Extract ids for all Moody's GRID hit results
-- Run `intapp:get_moodys_entity` for each ID (this can be in parallel/batches)
-- Capture each unique event category for each hit
-- Create a unique event category for each party (consolidate unique event categories from each hit)
-- For each search party
-  - If there are <3 Moody's GRID hits, make them all likely matches
-  - if there are >3 Moody's GRID hits, apply some name matching logic to pick the likely matches
----
-
-###▶️ **Step 7: Risk Scoring**
-- Run client and all other screened parties through risk scoring calculator for Likely Matches only
-- Calculate the overall risk score
+  - See Appendix C for API body/XML details
+  - Set `{reqID}` from response
+- Create a conflicts search linked to the request with `intapp:create_conflicts_search`
+  - See Appendix D for API body details
+  - Link to request with `{reqID}`
+  - Set `{conID}` from response
+- Run conflicts search with `intapp:run_conflicts_search` using `{conID}`
 
 ---
 
-###▶️ **Step 8: Display Moody's GRID Screen Results and Risk**
+#### ▶️ **Step 6: Run Moody's Screen**
+- Status Message: 🛡️ Running Moody's GRID screen...
+- Get conflicts results with `intapp:run_conflicts_results` for `{conID}`
+- Extract IDs for all Moody's GRID hit results
+- Run `intapp:get_moodys_entity` for each ID (can be run in parallel/batches)
+- For each hit, capture all unique event categories
+- Consolidate unique event categories per party across all hits
+- For each searched party:
+  - If < 3 Moody's GRID hits → mark all as likely matches
+  - If ≥ 3 Moody's GRID hits → apply name matching logic to determine likely matches
 
-> Return Request Name (ID) w/ link to url https://{yourhost}/app/request.aspx?rid={reqId}
+---
+
+#### ▶️ **Step 7: Risk Scoring**
+- Status Message: 📊 Calculating risk scores...
+- Run client and all screened parties through risk scoring calculator for Likely Matches only
+- Calculate the overall group risk score
+- See Appendix B for scoring details
+
+---
+
+#### ▶️ **Step 8: Display Moody's GRID Screen Results and Risk**
+
+> [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: 🔴 High / 🟠 Medium / 🔘 Low
 
 | Name (ID) | Risk Score | Relationship | Possible Matches | Likely Matches | Likely Match Risk Events |
@@ -430,17 +370,17 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | 🔷 Client Name (ID) | 🔴/🟠/🔘 | Client | # | # | e.g. MLA, PEP, TER |
 | 🔹 Party Name (ID) | 🔴/🟠/🔘 | e.g. Ultimate Parent | # | # | e.g. FRD, BRB |
 
-GO TO STEP COMPLETE
+**GO TO** Step COMPLETE
 
 ---
 
-### ▶️ **Step COMPLETE**
+#### ▶️ **Step COMPLETE**
 Playbook completed.
 
 ---
 
-### ▶️ **Step END**
-Playbook ended but not completed
+#### ▶️ **Step END**
+Playbook ended but not completed.
 
 ---
 
@@ -450,7 +390,7 @@ Playbook ended but not completed
 - **Risk Scores:** 🔴 High, 🟠 Medium, 🔘 Low
 - **Client Indicator:** 🔷 next to client name
 - **Related Party Indicator:** 🔹 next to party name
-- **Added Party Indicator:** ➕ before 🔹 for `was_added: true`
+- **New Party Indicator:** 🆕 before 🔹 when `isNew` = `true`
 
 #### B. Risk Score Calculation
 
@@ -466,73 +406,81 @@ Playbook ended but not completed
 - **Group score:** max(client score, highest related party score) + log(n) × modifier (5–10), capped at 100
 - **Risk Levels:** 🔴 High = 67–100, 🟠 Medium = 34–66, 🔘 Low = 0–33
 
-#### C. 'Intapp:create_request' API Details
+#### C. `intapp:create_request` API Details
 
 ##### API Body
+```json
 {
   "workflowDefinitionName": "AML/KYC - Moody's GRID",
   "name": "AML KYC - Moody's GRID for {clientPartyName}",
   "answers": [
     {
-      "questionName": {reqRefParty},
+      "questionName": "{reqRefParty}",
       "partyLookupAnswer": {
-        "partyId": {clientPartyId},
-        "entityName": {clientPartyName},
+        "partyId": "{clientPartyId}",
+        "entityName": "{clientPartyName}",
         "companyDetails": {
-          "companyName": {clientPartyName},
-          "primaryExternalDataProvider": {clientPartyExternalIdProvider},
-          "externalProviderIds": { {clientPartyExternalIdProvider}: {clientPartyExternalId} },
+          "companyName": "{clientPartyName}",
+          "primaryExternalDataProvider": "{clientPartyExternalIdProvider}",
+          "externalProviderIds": { "{clientPartyExternalIdProvider}": "{clientPartyExternalId}" }
         }
       }
     },
     {
-      "questionName": {reqRefGrid},
-      "dataTableSimpleXmlAnswer": See Grid Question XML
+      "questionName": "{reqRefGrid}",
+      "dataTableSimpleXmlAnswer": "See Grid Question XML below"
     }
   ]
 }
+```
 
-##### Grid Question XML 
+##### Grid Question XML
+*(one `<GridRow>` per entry in `{relatedPartiesTable[]}`, with `<RowId>` incrementing from 0)*
+```xml
 <Grid>
   <GridRow>
     <RowId>0</RowId>
     <Question>
       <Name>{reqRefGridName}</Name>
       <Value>
-        <PartyId>{relPartyId[0]}</PartyId>
-        <EntityName>{relPartyName[0]}</EntityName>
+        <PartyId>{relatedPartiesTable[0].partyId}</PartyId>
+        <EntityName>{relatedPartiesTable[0].partyName}</EntityName>
       </Value>
     </Question>
     <Question>
       <Name>{reqRefGridRelationship}</Name>
-      <Value>{relPartyRelationship[0]}</Value>
+      <Value>{relatedPartiesTable[0].relationships[0]}</Value>
     </Question>
   </GridRow>
- <GridRow>
+  <GridRow>
     <RowId>1</RowId>
     <Question>
       <Name>{reqRefGridName}</Name>
       <Value>
-        <PartyId>{relPartyId[1]}</PartyId>
-        <EntityName>{relPartyName[1]}</EntityName>
+        <PartyId>{relatedPartiesTable[1].partyId}</PartyId>
+        <EntityName>{relatedPartiesTable[1].partyName}</EntityName>
       </Value>
     </Question>
     <Question>
       <Name>{reqRefGridRelationship}</Name>
-      <Value>{relPartyRelationship[1]}</Value>
+      <Value>{relatedPartiesTable[1].relationships[0]}</Value>
     </Question>
+  </GridRow>
 </Grid>
+```
 
-#### D. 'Intapp:create_conflicts_search' API Details
+#### D. `intapp:create_conflicts_search` API Details
 
 ##### API Body
+*(one entry per `{relatedPartiesTable[]}` entry, plus the client)*
+```json
 {
   "name": "AML KYC - Moody's GRID Screen for {clientPartyName}",
-  "requestId": {reqID},
+  "requestId": "{reqID}",
   "searchTerms": [
-    { "affiliationType": {clientPartyConAff}, "name": {clientPartyName}, "partyId": {clientPartyId} },
-    { "affiliationType": {relPartyConAff},   "name": {relPartyName[0]}, "partyId": {relPartyId[0]} },
-    { "affiliationType": {relPartyConAff},   "name": {relPartyName[1]}, "partyId": {relPartyId[1]} }
-
+    { "affiliationType": "{clientPartyConAff}", "name": "{clientPartyName}", "partyId": "{clientPartyId}" },
+    { "affiliationType": "{relPartyConAff}", "name": "{relatedPartiesTable[0].partyName}", "partyId": "{relatedPartiesTable[0].partyId}" },
+    { "affiliationType": "{relPartyConAff}", "name": "{relatedPartiesTable[1].partyName}", "partyId": "{relatedPartiesTable[1].partyId}" }
   ]
 }
+```
