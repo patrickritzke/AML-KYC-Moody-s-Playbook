@@ -223,8 +223,10 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - **GO TO** Step 2d
 
 ##### ▶️ **Step 2d: Find Existing Intapp Parties in Other Corporate Structure Relationships**
-
+<!--
 > ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, generate plausible dummy data simulating what these calls would return, and populate `{relatedParties}` accordingly.
+-->
+> ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, just assume there are no relationships for these types (all counts 0)
 
 - Using `{clientPartyId}`, simulate calls to the following (future) endpoints:
 
