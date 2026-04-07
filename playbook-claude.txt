@@ -119,15 +119,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - **Summaries:** No step-level summaries or confirmations. Proceed directly to the next step unless user input is required. Final summary only at the end of the full workflow.
 - **Tool/task visibility:** Do not display raw tool names, task counts, or execution details. Instead show a single friendly status line at each major milestone.
 - **Task list visibility:** Do not display task lists, task counts, or task progress indicators at any point during the workflow. Execute silently without surfacing the task plan to the user.
-- **Only display the friendly status messages defined in the table below for execution steps. Display steps have no status message — their output is the communication. Do not display any other status updates, confirmations, progress indicators, or commentary at any point during the workflow — including on loop iterations.**
-
-| Step | Friendly Status Message |
-|---|---|
-| 1 | 🔍 Looking up [Client Name]... |
-| 2 | 🌳 Finding corporate structure... |
-| 3–4 | 🔗 Identifying key corporate structure relationships... |
-| 6 | 🛡️ Running Moody's GRID screen... |
-| 7 | 📊 Calculating risk scores... |
+- **Only display the friendly status messages defined in for the step. Do not display any other status updates, confirmations, progress indicators, or commentary at any point during the workflow — including on loop iterations.**
 
 ---
 
@@ -311,7 +303,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Display |
 > | **Status Message** | *(none — display output is the communication)* |
-> | **Notification Rule** | Return results only — no preamble, commentary, or confirmation |
+> | **Notification Rule** | Return ONLY the display specified below. Do not add commentary, preamble, or narration of any kind |
 
 Display the following to the user:
 
@@ -326,12 +318,7 @@ Display the following to the user:
 | 🆕 🔹 `{partyName}` (`{partyId}`) *(if `isNew` = true)* | `{relationships[]}` comma-separated |
 | 🔹 `{partyName}` (`{partyId}`) *(if `isNew` = false)* | `{relationships[]}` comma-separated |
 
-*(one row per entry in `{relatedPartiesTable[]}`)*
-
-Below the table, display a coverage summary — repeat for any relationship where `total` > 0:
-
-> *Showing `len({relatedPartiesTable[]})` existing Intapp parties across the corporate structure.*
-> *[Relationship label]: `{relatedParties.[key].parties}` of `{relatedParties.[key].total}` entities matched to existing Intapp parties.*
+---
 
 - **GO TO** Step 4
 
