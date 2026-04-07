@@ -13,6 +13,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - {clientPartyExternalId} = set by playbook
 - {clientPartyExternalIdProvider} = set by playbook
 - {clientPartyName} = set by playbook
+- {treeGUO[0]} - set by playbook
 - {reqType} = "AML/KYC - Moody's GRID"
 - {reqID} = set by playbook
 - {reqRefParty} = "Party"
@@ -66,109 +67,190 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 ### Workflow Steps
 
-▶️ **Step 1: Client Lookup**
+#### **Step 1: Find Party**
 
-- Pre-step (Chrome init):
+####▶️ **Step 1a: Search Party**
+
+- Type: Processing
+- Status Message: 🔍 Looking up [Party Name]...
+- Trigger: User Input
+- Inputs: Party Name (free text)
+- Substeps
+  - Identify party name from user input
+  - Search the system for existing party record by party name with `intapp:search_parties`
+  - If found
+    - Set variables {clientParty*}
+    - GO TO Step 2
+  - If not found, GO TO step 1b
+
+####▶️ **Step 1b: Suggest Party**
+
   - If {useChromeMCP}:
     - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
-    - If the call fails: set {useChromeMCP} = FALSE
-    - If the call succeeds: note whether a {yourhost} tab is active (used below if search fails)
-- Search system for existing client record by entity name
-- If not found: notify user and stop workflow
-- If found: 
-  - Set variable: {clientPartyId}, {clientPartyName}
-  - retrieve full client profile and proceed
-- If not found:
-  - If {useChromeMCP} AND a {yourhost} tab was found active
-    - Read the active tab page contents
-    - Identify up to 10 party names on the page (prioritize those in `Name (ID)` format)
-    - If any are identified, present them as a lettered list in this exact format:
-
-      > *I see you're working on [description of page]. Would you like to run AML/KYC on any of these parties?*
-      >
-      > - **A** — Party Name (ID)
-      > - **B** — Party Name (ID)
-      > - **C** — Party Name (ID)
-      > - *(up to 10 options)*
-
-  - Wait for user to type a letter to select a party, then proceed with that party
-- Else
-  - Return: *I could not find that party on the system.*
-  - Stop workflow
-
+    - If the call fails:
+      - Set {useChromeMCP} = FALSE
+      - GO TO Step END
+    - If the call succeeds
+      - Determine if a {yourhost} tab is active
+      - If a {yourhost} tab was not found active
+        -GO TO Step END
+      -If a {yourhost} tab was found active
+        - Read the active tab page contents
+        - Detect up to 10 party names on the page (prioritize those in `Name (ID)` format)
+        - if no party names are detected
+          - GO TO Step End
+        - If party names are detected
+          - Present them as a lettered list in this exact format:
+            > *I see you're working on [description of page]. Would you like to run AML/KYC on any of these parties?*
+            >
+            > - **A** — Party Name (ID)
+            > - **B** — Party Name (ID)
+            > - **C** — Party Name (ID)
+            > - *(up to 10 options)*
+          - Wait for user to type a letter to select a party - then GO BACK TO Step 1a with that party name
 
 ---
 
-▶️ **Step 2: Find Client's Corporate Tree**
+### ▶️ **Step 2: Identify Party Corporate Structure Relationships**
+
+#### ▶️ **Step 2a: Find Party's Corporate Tree**
 - Get partyId of client
-- Call `get_client_profile` using the client's partyId to retrieve `corporateTrees`
+- Call `get_client_profile` using the {clientPartyId} to retrieve `corporateTrees`
 - From the response, capture the `rootCompanyId` for each corporate tree
-- Retain the root IDs for use in Step 3
-- If corporate tree root IDs exist 
-  - Set {clientPartyExternalIdProvider} to the provider that matches the tree source
-  - Set {clientPartyExternalId} variable to the Id on the client party profile - use the one that corresponds to {clientPartyExternalIdProvider}
-  - If {useChromeMCP}
-    - Open https://{appHost}/app/app/index.html#/corporate-tree?partyId={clientPartyId}&externalId=clientPartyExternalId}&providerType={clientPartyExternalIdProvider}
-- Else If no corporate tree root IDs exist: run third-party lookup and link to best match
+  - If not found
+    - GO TO Step END
+  - If found
+    - Set variable {treeGUO[]) for all found
+    - Set {clientPartyExternalIdProvider} to the provider that matches the tree source
+    - Set {clientPartyExternalId} variable to the Id on the client party profile - use the one that corresponds to {clientPartyExternalIdProvider}
+    - GO TO Step 2b
 
 ---
 
-▶️ **Step 3: Find Other Existing Intapp Parties in Corporate Tree(s)**
-
-Using the root IDs from Step 2:
-
-**Fetch each corporate tree with parties:**
-1. For each `rootCompanyId`, call `intapp:get_corporate_tree` with `providerType` and `rootCompanyId` from Step 2, requesting `properties=Parties`
-2. Walk the returned tree recursively — every node in the tree is returned, not just existing Intapp parties
-3. For each node, inspect its `parties[]` array — if a node has a non-empty `parties[]`, it is linked to one or more existing Intapp parties; capture each `partyId` from that array
-4. Record the tree node's position (depth, parent node) alongside the captured `partyId` for relationship classification in the next sub-step
-
-**Determine the relationship** of each captured node to the client:
-- If the entity is the root: **Ultimate Parent**
-- If the entity is an ancestor of the client (between root and client): **Parent**
-- If the entity is a descendant of the client (in the client's `subCompanies` tree): **Subsidiary**
-- If the entity shares the same immediate parent as the client: **Sibling**
-
-Track each captured party:
-
-| Field | Value |
-|---|---|
-| `partyId` | Existing Intapp party ID (from `parties[]` on the tree node) |
-| `name` | Party name |
-| `relationship` | Ultimate Parent, Parent, Subsidiary, or Sibling |
-| `source` | `corporate_tree` |
-| `was_added` | `false` (pre-existing) |
-
-**Set Variable Array
-- {relPartyId[]}
-- {relPartyName[]}
-- {relPartyExternalId[]}
-- {relPartyExternalIdProvider[]}
-- {relPartyRelationship[]}
-
-If Step 5b included any corporate tree relationship selections, resolve those entities and merge into the tracked party list. Deduplicate by partyId — only mark `was_added: true` if not pre-existing.
+#### ▶️ **Step 2b: Open Corporate Tree Page**
+  - If {useChromeMCP}:
+    - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
+    - If the call fails:
+      - Set {useChromeMCP} = FALSE
+      - GO TO Step 2c
+    - If the call succeeds
+      - Determine if a {yourhost} tab is active
+      - If a {yourhost} tab was not found active
+        -GO TO Step 2c
+      -If a {yourhost} tab was found active
+        -Open https://{appHost}/app/app/index.html#/corporate-tree?partyId={clientPartyId}&externalId=clientPartyExternalId}&providerType={clientPartyExternalIdProvider}
+        -GO TO Step 2c
+  -GO To Step 2c
 
 ---
 
-▶️ **Step 4: Find Other Existing Intapp Parties in Other Corporate Structure Relationships**
+#### ▶️ **Step 2c: Find Other Existing Intapp Parties in Corporate Tree(s)**
+- Initialize `{relatedParties}` as an empty object:
+  ```
+  {relatedParties} = {
+    GUO:        [],
+    Parent:     [],
+    Subsidiary: [],
+    Affiliate:  [],
+    Principal:  [],
+    Shareholder:[],
+    UBO:        []
+  }
+  ```
+- Initialize `{relatedEntitiesCount}` as a zero-value object (counts all tree nodes meeting each relationship, regardless of Intapp party status):
+  ```
+  {relatedEntitiesCount} = {
+    GUO:        0,
+    Parent:     0,
+    Subsidiary: 0,
+    Affiliate:  0,
+    Principal:  0,
+    Shareholder:0,
+    UBO:        0
+  }
+  ```
+- For each `{treeGUO[#]}` in `{treeGUO[]}`:
+  - Call `intapp:get_corporate_tree` with:
+    - `rootCompanyId` = `{treeGUO[#]}`
+    - `providerType` = `{clientPartyExternalIdProvider}`
+    - `properties` = `Parties`
+  - Recursively walk **all nodes** in the returned tree (the full tree is always returned, not just Intapp-matched nodes)
+  - For each node where `parties[]` is **non-empty**:
+    - For each `partyId` found in the node's `parties[]`:
+      - If `partyId` == `{clientPartyId}` → **skip**
+      - Otherwise, evaluate the node's structural relationship to `{clientPartyExternalId}` and append `{ partyId, partyName, externalId }` to the appropriate key(s) in `{relatedParties}` — **a node may qualify for more than one**:
 
-Run Get board members, Get shareholders, and Get beneficial owners using the client's partyId (not rootId). Capture all nodes that have a partyId.
+        | Condition | `{relatedParties}` key | `{relatedEntitiesCount}` key |
+        |---|---|---|
+        | Node is the root ultimate owner of the tree | `GUO` | `GUO` |
+        | Node is an **ancestor** of the client (client is nested somewhere in node's `subCompanies`) | `Parent` | `Parent` |
+        | Node is a **descendant** of the client (node is nested in client's `subCompanies`) | `Subsidiary` | `Subsidiary` |
+        | None of the above | `Affiliate` | `Affiliate` |
 
-Track each captured party:
+      - Increment the matching `{relatedEntitiesCount}` key for **every** qualifying node, regardless of whether it has a `parties[]` match
+      - Only append to `{relatedParties}` if the node has a non-empty `parties[]` (and `partyId` != `{clientPartyId}`)
 
-| Field | Value |
-|---|---|
-| `partyId` | Existing Intapp party ID if available, otherwise assign a unique mock ID in the format `US1FAKE001`, `US1FAKE002`, etc. (incrementing across all mock parties) |
-| `name` | Party name |
-| `relationship` | Management, Board, Shareholder, or Beneficial Owner |
-| `source` | `board`, `shareholders`, or `beneficial_owners` |
-| `was_added` | `false` (pre-existing) |
-
-If Step 5b included any corporate structure relationship selections, resolve those entities and merge into the tracked party list. Deduplicate by partyId — only mark `was_added: true` if not pre-existing. Merge all results into the tracked party list from Step 3.
-
-> ⚠️ **Mock limitation:** APIs for board members, shareholders, and beneficial owners do not currently expose partyIDs. For now, use real names where fetchable, or placeholder person names (not companies) if data is unavailable. Assign mock IDs in the format `US1FAKE001`, `US1FAKE002`, etc.
+- After processing all `{treeGUO[]}` trees, **de-duplicate** each key in `{relatedParties}` independently on `partyId`
+- **GO TO** Step 2d
 
 ---
+
+#### ▶️ **Step 2d: Find Existing Intapp Parties in Other Corporate Structure Relationships**
+
+> ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, generate plausible dummy data simulating what these calls would return, and populate `{relatedParties}` accordingly.
+
+- Using `{clientPartyId}`, simulate calls to the following (future) endpoints and append `{ partyId, partyName, externalId }` to the corresponding key in `{relatedParties}`:
+
+  | (Future) API Call | `{relatedParties}` key |
+  |---|---|
+  | `intapp:get_principals` | `Principal` |
+  | `intapp:get_shareholders` | `Shareholder` |
+  | `intapp:get_ubos` | `UBO` |
+
+- For each simulated response, walk all returned nodes and:
+  - Increment the matching `{relatedEntitiesCount}` key for **every** node, regardless of party status
+  - Add any node with a non-empty `parties[]` to the appropriate key in `{relatedParties}`
+- De-duplicate each newly populated key in `{relatedParties}` on `partyId`
+- **GO TO** Step 2e
+
+---
+
+#### ▶️ **Step 2e: Consolidate Related Parties into Summary Variable**
+
+- Flatten and deduplicate `{relatedParties}` into a single array `{relatedPartiesTable}`, one object per unique `partyId`, aggregating all relationship keys the party appears under:
+
+  ```
+  {relatedPartiesTable} = [
+    {
+      partyId:       string,
+      partyName:     string,
+      externalId:    string,
+      relationships: string[],  // all {relatedParties} keys this partyId appears in
+      isNew:         boolean
+    },
+    ...
+  ]
+  ```
+
+- Counts are derived directly from `{relatedParties}` as needed in later steps — no separate count variables required:
+
+  | Count | Reference |
+  |---|---|
+  | Ultimate Parents | `len({relatedParties.GUO})` of `{relatedEntitiesCount.GUO}` |
+  | Parents | `len({relatedParties.Parent})` of `{relatedEntitiesCount.Parent}` |
+  | Subsidiaries | `len({relatedParties.Subsidiary})` of `{relatedEntitiesCount.Subsidiary}` |
+  | Affiliates | `len({relatedParties.Affiliate})` of `{relatedEntitiesCount.Affiliate}` |
+  | Principals | `len({relatedParties.Principal})` of `{relatedEntitiesCount.Principal}` |
+  | Shareholders | `len({relatedParties.Shareholder})` of `{relatedEntitiesCount.Shareholder}` |
+  | Beneficial Owners | `len({relatedParties.UBO})` of `{relatedEntitiesCount.UBO}` |
+  | **Total Unique Parties** | `len({relatedPartiesTable})` |
+
+- **GO TO** Step 2f
+
+- **GO TO** Step 3
+
+
+
 <!--
 
 ▶️ **Step #: Create Request (optional)**
@@ -177,53 +259,83 @@ If Step 5b included any corporate structure relationship selections, resolve tho
 ---
 
 -->
+###▶️ **Step 3: Display Client & Key Corporate Structure Relationships**
 
-▶️ **Step 5: Display Client & Key Corporate Structure Relationships**
-
-**Title:** 🔷 Client Name (ID)
-**Subtitle:** Corporate Tree(s): Root Name 1 (ID), Root Name 2 (ID)
-
-| Party Name (ID) | Relationship(s) |
-|---|---|
-| 🔹 Party Name (ID) | e.g. Ultimate Parent |
-| 🔹 Party Name (ID) | e.g. Subsidiary |
-| 🔹 Party Name (ID) | e.g. Shareholder, Beneficial Owner |
-| ➕ 🔹 Party Name (ID) | e.g. Board Member |
-
-> ℹ️ Key relationships are existing Intapp parties across all corporate trees combined
-> ➕ Indicates party was added during this workflow
+- Display the following to the user:
 
 ---
 
-▶️ **Step 5b: Prompt User to Add More Key Corporate Structure Relationships to Screen**
+**🔷 `{clientPartyName}` (`{clientPartyId}`)**
 
-Provide user the option to add more corproate structure relationships:
-- Only provide explicit relationship options specified in this step
-- Identify the unique entities based on the externalID that map to each relationship. Keep in mind that some externalIDs could be in multiple lists (i.e. ultimate parent and all parents)
-- For each relationship, determine which externalIds are already a party vs. the ones that are not
-- When there are multiple rootID corporate trees, aggregate the unique IDs for each relationships (i.e. there could be 2 external IDs that are ultimate parents)
-- Categorize each relationship
-  - Selectable - not all external IDs in the list are already parties
-    - These relationships should have a option letter and ➕ icon
-  - Suppressed - all external IDs in the list are already parties (there is no reason the user should select this relationship option)
-    - These relationships should have no option letter and ✅ icon
-- Prepare a suffix that shows # included of # total for each relationship (DO NOT try and display names or any other info)
-  -i.e. (2 of 4 included)
-  -i.e. (2 of 2 included)
+**Corporate Structure Relationships to screen on Moody's GRID**
 
-**Prompt:** *Type one or more options to ➕ add relationships (e.g. A B C) OR type "RUN" to proceed to Moody's GRID screening of client and existing key corporate structure entities.*
+| Party Name (ID) | Relationship(s) |
+|---|---|
+| *(for each entry in `{relatedPartiesTable}`)* | *(for each entry in `{relatedPartiesTable}`)* |
+| 🆕 🔹 `{partyName}` (`{partyId}`) *(if `isNew` = true)* | `{relationships[]}` comma-separated |
+| 🔹 `{partyName}` (`{partyId}`) *(if `isNew` = false)* | `{relationships[]}` comma-separated |
 
-Options:
-- A ➕ Ultimate Parent (1 of 2)
--   ✅ Client's Immediate Parent (2 of 2)
-- C ➕ All Client's Parents (2 of 4)
-- D ➕ All Client's Immediate Subsidiaries (0 of 5)
-- E ➕ All Management (2 of 10)
-- F ➕ All Board Members (1 of 4)
-- G ➕ Shareholders w/ known ownership ≥10% (0 of 4)
-- H ➕ Beneficial Owners w/ known ownership ≥10% (1 of 2)
+- Below the table, display a relationship **coverage summary** using `{relatedEntitiesCount}` and `{relatedParties}`:
 
-For each entity selected by the user that is not already an Intapp party, call `intapp:create_party` to create it before returning to Step 3. Once all new parties are created, loop back to Step 3 — the standard party detection logic will pick them up automatically on the next pass.
+  > *Showing `len({relatedPartiesTable})` existing Intapp parties across the corporate structure.*
+  > *`{relatedEntitiesCount.Subsidiary}` subsidiaries found in tree — `len({relatedParties.Subsidiary})` matched to existing Intapp parties.*
+  > *(repeat for any relationship category where `{relatedEntitiesCount}` > 0)*
+
+- **GO TO** Step 4
+
+---
+
+###▶️ **Step 4: Prompt User to Add More Key Corporate Structure Relationships to Screen**
+
+- Using `{relatedParties}` and `{relatedEntitiesCount}`, evaluate each relationship category below:
+  - Identify all **unique `externalId`s** that map to each relationship (an `externalId` may appear in multiple categories)
+  - For each relationship, determine:
+    - How many of the unique `externalId`s are **already an Intapp party** (`{relatedParties.*}`)
+    - How many **total** unique `externalId`s exist for that relationship (`{relatedEntitiesCount.*}`)
+  - When multiple root trees exist in `{treeGUO[]}`, aggregate unique `externalId`s across all trees per relationship
+
+- Categorize each relationship option and format accordingly:
+
+  | Category | Criteria | Display Format |
+  |---|---|---|
+  | **Addable** | At least one `externalId` is not yet an Intapp party | Option letter + name + `(X of Y included)` suffix |
+  | **Already Added** | All `externalId`s are already Intapp parties | No letter + ✅ + name + `(X of X included)` suffix |
+  | **Not Available** | No `externalId`s exist for this relationship | No letter + name + `(0 available)` suffix |
+
+- Display the following prompt to the user:
+
+---
+
+*Type one or more options to add relationships (e.g. A B C) OR type "RUN" to proceed to Moody's GRID screening of client and existing key corporate structure entities.*
+
+| | Relationship | Coverage |
+|---|---|---|
+| A | **Ultimate Parent** | *(X of Y included)* |
+| | ✅ **Client's Immediate Parent** | *(X of X included)* |
+| C | **All Client's Parents** | *(X of Y included)* |
+| D | **All Client's Immediate Subsidiaries** | *(X of Y included)* |
+| E | **All Management** | *(X of Y included)* |
+| | **All Board Members** | *(0 available)* |
+| G | **Shareholders w/ known ownership ≥10%** | *(X of Y included)* |
+| H | **Beneficial Owners w/ known ownership ≥10%** | *(X of Y included)* |
+
+> ⚠️ Option letters are assigned only to **Addable** relationships. Letters are assigned sequentially (A, B, C...) skipping Already Added and Not Available rows. The example letters above are illustrative — recalculate based on actual categorization at runtime.
+
+---
+
+- Initialize `{newlyCreatedParties[]}` as an empty array to track parties created in this step:
+  ```
+  {newlyCreatedParties[]} = []   // [ partyId, ... ]
+  ```
+
+- WAIT for user input:
+  - If user types one or more option letters:
+    - For each selected relationship, identify all `externalId`s that are **not** yet an Intapp party
+    - For each non-party entity, call `intapp:create_party` to create it
+      - On success, append `partyId` to `{newlyCreatedParties[]}`
+      - On failure, note the error and continue with remaining entities
+    - Once all creation attempts → **GO BACK TO Step 2** and repeat each subsequent step including all PROMPT and WAIT actions
+  - If user types `RUN` → **GO TO Step 5**
 ---
 
 <!--
@@ -244,7 +356,7 @@ For each entity selected by the user that is not already an Intapp party, call `
 
 -->
 
-▶️ **Step 6: Create Request and Conflicts Screen**
+▶️ **Step 5: Create Request and Conflicts Screen**
 
 - Create a request with `intapp:create_request'
   - See appendix for API Body/XML details
@@ -258,7 +370,7 @@ For each entity selected by the user that is not already an Intapp party, call `
 
 ---
 
-▶️ **Step 6b: Run Moody's Screen**
+###▶️ **Step 6: Run Moody's Screen**
 
 <!--
 - Mock step — create fake results for entities selected to screen
@@ -277,13 +389,13 @@ For each entity selected by the user that is not already an Intapp party, call `
   - if there are >3 Moody's GRID hits, apply some name matching logic to pick the likely matches
 ---
 
-▶️ **Step 7: Risk Scoring**
+###▶️ **Step 7: Risk Scoring**
 - Run client and all other screened parties through risk scoring calculator for Likely Matches only
 - Calculate the overall risk score
 
 ---
 
-▶️ **Step 8: Display Moody's GRID Screen Results and Risk**
+###▶️ **Step 8: Display Moody's GRID Screen Results and Risk**
 
 > Return Request Name (ID) w/ link to url https://{yourhost}/app/request.aspx?rid={reqId}
 > ## Overall Risk Score: 🔴 High / 🟠 Medium / 🔘 Low
@@ -292,6 +404,18 @@ For each entity selected by the user that is not already an Intapp party, call `
 |---|---|---|---|---|---|
 | 🔷 Client Name (ID) | 🔴/🟠/🔘 | Client | # | # | e.g. MLA, PEP, TER |
 | 🔹 Party Name (ID) | 🔴/🟠/🔘 | e.g. Ultimate Parent | # | # | e.g. FRD, BRB |
+
+GO TO STEP COMPLETE
+
+---
+
+### ▶️ **Step COMPLETE**
+Playbook completed.
+
+---
+
+### ▶️ **Step END**
+Playbook ended but not completed
 
 ---
 
