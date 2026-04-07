@@ -245,20 +245,10 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   | Beneficial Owners | `len({relatedParties.UBO})` of `{relatedEntitiesCount.UBO}` |
   | **Total Unique Parties** | `len({relatedPartiesTable})` |
 
-- **GO TO** Step 2f
-
 - **GO TO** Step 3
-
-
-
-<!--
-
-▶️ **Step #: Create Request (optional)**
-
 
 ---
 
--->
 ###▶️ **Step 3: Display Client & Key Corporate Structure Relationships**
 
 - Display the following to the user:
@@ -338,35 +328,17 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - If user types `RUN` → **GO TO Step 5**
 ---
 
-<!--
-
-▶️ **Step 6: Run Moody's GRID Screen**
-
----
-
-▶️ **Step 6a: Run Moody's GRID Screen via Request Conflicts Workflow Step
-
----
-
-▶️ **Step 6b: Run Moody's GRID Screen via Conflicts linked to Request
-
----
-
-▶️ **Step 6c: Run Moody's GRID Screen via standalone Conflicts
-
--->
-
 ▶️ **Step 5: Create Request and Conflicts Screen**
 
-- Create a request with `intapp:create_request'
+- Create a request with `intapp:create_request`
   - See appendix for API Body/XML details
   - Set variable {reqID}
 
-- Create a conflicts searched linked to the request with `intapp:create_conflicts_search'
+- Create a conflicts searched linked to the request with `intapp:create_conflicts_search`
   -See appendix for API body details
   -Link to request with {reqID}
   -Set variable {conID}
-- Run conflicts search `intapp:run_conflicts_search' and {conID}
+- Run conflicts search `intapp:run_conflicts_search` and {conID}
 
 ---
 
@@ -498,7 +470,7 @@ Playbook ended but not completed
     </Question>
 </Grid>
 
-#### C. 'Intapp:create_conflicts_search' API Details
+#### D. 'Intapp:create_conflicts_search' API Details
 
 ##### API Body
 {
@@ -506,8 +478,8 @@ Playbook ended but not completed
   "requestId": {reqID},
   "searchTerms": [
     { "affiliationType": {clientPartyConAff}, "name": {clientPartyName}, "partyId": {clientPartyId} },
-    { "affiliationType": {relPartyConAff},  {relPartyName[0]}, "partyId": {relPartyId[0]} },
-    { "affiliationType": {relPartyConAff},  {relPartyName[1]}, "partyId": {relPartyId[1]} }
+    { "affiliationType": {relPartyConAff},   "name": {relPartyName[0]}, "partyId": {relPartyId[0]} },
+    { "affiliationType": {relPartyConAff},   "name": {relPartyName[1]}, "partyId": {relPartyId[1]} }
 
   ]
 }
