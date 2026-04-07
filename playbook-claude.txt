@@ -8,36 +8,89 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - Establish ongoing monitoring and schedule periodic reviews
 
 ### Playbook Variables
-- {yourhost} = "shalaka2-sand.opensandbox2.intapp.com"
-- {clientPartyId} = set by playbook
-- {clientPartyExternalId} = set by playbook
-- {clientPartyExternalIdProvider} = set by playbook
-- {clientPartyName} = set by playbook
-- {treeGUO[0]} - set by playbook
-- {reqType} = "AML/KYC - Moody's GRID"
-- {reqID} = set by playbook
-- {reqRefParty} = "Party"
-- {relPartyId[]} = set by playbook
-- {relPartyExternalId[]} = set by playbook
-- {relPartyExternalIdProvider[]} = set by playbook
-- {relPartyName[]} = set by playbook
-- {relPartyRelationship[]} = set by playbook
-- {reqRefGrid} = "grdMoodysScreening"
-  - [reqRefGridName} = "Name"
-  - [reqRefGridRiskScore} = "Risk Score"
-  - [reqRefGridRelationship} = "Relationship"
-  - [reqRefGridPosssibleMatch} = "Possible Matches"
-  - [reqRefGridLikelyMatch} = "Likely Matches"
-  - [reqRefGridLikelyMatchRiskEvent} = "Likely Matches Risk Events"
-- {conID} = set by playbook
-- {relPartyConAff} = "corpStructure"
-- {clientPartyConAff} = "CLNT"
-- {useChromeMCP} — default TRUE
-  - At workflow start, attempt to call `tabs_context_mcp` (or any Chrome MCP tool)
-  - If the call succeeds: keep {useChromeMCP} = TRUE
-  - If the call fails or the tool is unavailable: set {useChromeMCP} = FALSE and proceed without Chrome
-  - Do not re-evaluate after this initial check
-  - if chrome connector is not available, then force this to FALSE
+
+### Playbook Variables
+
+#### Debug Mode
+- `{debug}` = TRUE if user input includes "with debug"
+
+#### Hardcoded
+- `{yourhost}` = `"shalaka2-sand.opensandbox2.intapp.com"`
+- `{reqType}` = `"AML/KYC - Moody's GRID"`
+- `{reqRefParty}` = `"Party"`
+- `{relPartyConAff}` = `"corpStructure"`
+- `{clientPartyConAff}` = `"CLNT"`
+- `{reqRefGrid}` = `"grdMoodysScreening"`
+  - `{reqRefGridName}` = `"Name"`
+  - `{reqRefGridRiskScore}` = `"Risk Score"`
+  - `{reqRefGridRelationship}` = `"Relationship"`
+  - `{reqRefGridPossibleMatch}` = `"Possible Matches"`
+  - `{reqRefGridLikelyMatch}` = `"Likely Matches"`
+  - `{reqRefGridLikelyMatchRiskEvent}` = `"Likely Matches Risk Events"`
+
+---
+
+#### Client Party
+- `{clientPartyId}` — Intapp party ID of the client
+- `{clientPartyName}` — Display name of the client
+- `{clientPartyExternalId}` — External ID of the client (e.g. Moody's GRID ID)
+- `{clientPartyExternalIdProvider}` — Provider that issued the external ID
+
+---
+
+#### Corporate Tree
+- `{treeGUO[]}` — Array of `rootCompanyId`s, one per corporate tree found on the client profile
+
+---
+
+#### Related Parties
+- `{relatedParties}` — Single object tracking all corporate structure relationships. Each key holds a count of all entities (`total`), a count of those already Intapp parties (`parties`), and the list of matched party records (`list`):
+  ```
+  {relatedParties} = {
+    GUO:        { parties: 0, total: 0, list: [] },
+    Parent:     { parties: 0, total: 0, list: [] },
+    Subsidiary: { parties: 0, total: 0, list: [] },
+    Affiliate:  { parties: 0, total: 0, list: [] },
+    Principal:  { parties: 0, total: 0, list: [] },
+    Shareholder:{ parties: 0, total: 0, list: [] },
+    UBO:        { parties: 0, total: 0, list: [] }
+  }
+  ```
+  - `list[]` entries: `{ partyId, partyName, externalId }`
+  - Increment `total` for every qualifying node regardless of party status
+  - Increment `parties` and append to `list` only when node has a matched Intapp party
+
+- `{relatedPartiesTable[]}` — Flattened, deduplicated array built in Step 2e for display and downstream use:
+  ```
+  {relatedPartiesTable[]} = [
+    {
+      partyId:       string,
+      partyName:     string,
+      externalId:    string,
+      relationships: string[],
+      isNew:         boolean
+    }
+  ]
+  ```
+
+---
+
+#### Newly Created Parties
+- `{newlyCreatedParties[]}` — Flat array of `partyId` strings for parties created during this workflow run:
+  ```
+  {newlyCreatedParties[]} = []   // [ partyId, ... ]
+  ```
+
+---
+
+#### Request & Conflicts
+- `{reqID}` — ID of the created request
+- `{conID}` — ID of the created conflicts search
+
+---
+
+#### Runtime Flags
+- `{useChromeMCP}` — `TRUE` if Chrome MCP is available; `FALSE` if unavailable or call fails. Evaluated once at startup and never re-evaluated.
 
 ### Overall Behavior Rules
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
