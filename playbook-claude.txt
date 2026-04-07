@@ -272,7 +272,9 @@ For each entity selected by the user that is not already an Intapp party, call `
 - Run `intapp:get_moodys_entity` for each ID (this can be in parallel/batches)
 - Capture each unique event category for each hit
 - Create a unique event category for each party (consolidate unique event categories from each hit)
-
+- For each search party
+  - If there are <3 Moody's GRID hits, make them all likely matches
+  - if there are >3 Moody's GRID hits, apply some name matching logic to pick the likely matches
 ---
 
 ▶️ **Step 7: Risk Scoring**
