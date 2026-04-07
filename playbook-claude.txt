@@ -253,15 +253,25 @@ For each entity selected by the user that is not already an Intapp party, call `
 - Create a conflicts searched linked to the request with `intapp:create_conflicts_search'
   -See appendix for API body details
   -Link to request with {reqID}
+  -Set variable {conID}
+- Run conflicts search `intapp:run_conflicts_search' and {conID}
 
 ---
 
 ▶️ **Step 6b: Run Moody's Screen**
+
+<!--
 - Mock step — create fake results for entities selected to screen
 - Capture # of Possible Matches
 - Capture # of Likely Matches (High Match Score)
 - List of risk categories for each match
+-->
 
+- Get conflicts results with `intapp:run_conflicts_results' for {conID}
+- Extract ids for all Moody's GRID hit results
+- Run `intapp:get_moodys_entity` for each ID (this can be in parallel/batches)
+- Capture each unique event category for each hit
+- Create a unique event category for each party (consolidate unique event categories from each hit)
 
 ---
 
