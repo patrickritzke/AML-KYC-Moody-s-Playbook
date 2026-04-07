@@ -29,18 +29,15 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - `{reqRefGridLikelyMatchRiskEvent}` = `"Likely Matches Risk Events"`
 
 #### Client Party
-*Set in Step 1*
 - `{clientPartyId}` — Intapp party ID of the client
 - `{clientPartyName}` — Display name of the client
 - `{clientPartyExternalId}` — External ID of the client (e.g. Moody's GRID ID)
 - `{clientPartyExternalIdProvider}` — Provider that issued the external ID
 
 #### Corporate Tree
-*Set in Step 2a*
 - `{treeGUO[]}` — Array of `rootCompanyId`s, one per corporate tree found on the client profile
 
 #### Related Parties
-*Initialized at workflow start, populated in Steps 2c–2d*
 - `{relatedParties}` — Single object tracking all corporate structure relationships. Each key holds a count of all entities (`total`), a count of those already Intapp parties (`parties`), and the list of matched party records (`list`):
   ```
   {relatedParties} = {
@@ -138,19 +135,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 #### ▶️ **Step 1: Find Party**
 
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing |
-> | **Status Message** | *(none — delegated to sub-steps)* |
-> | **Notification Rule** | Silent |
-
 ##### ▶️ **Step 1a: Search Party**
-
 > | Field | Value |
 > |---|---|
 > | **Type** | Processing |
-> | **Status Message** | 🔍 Looking up [Party Name]... |
-> | **Notification Rule** | Show status message only — suppress all tool output and commentary |
+> | **Status Message** | 🔍 Looking up [Client Name]... |
+> | **Notification Rule** | Only show status. Do not show any commentary or narration |
+
 
 - Search the system for existing party record by party name with `intapp:search_parties`
 - If found:
@@ -159,12 +150,12 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - If not found → **GO TO** Step 1b
 
 ##### ▶️ **Step 1b: Suggest Party**
-
 > | Field | Value |
 > |---|---|
-> | **Type** | Display + User Prompt |
-> | **Status Message** | *(none — display output is the communication)* |
-> | **Notification Rule** | Return results only — no commentary or narration |
+> | **Type** | Analysis and User Prompt |
+> | **Status Message** | 🔍 Looking up [Client Name]... |
+> | **Notification Rule** | Only show status, prompt, and options. Do not show any commentary or narration |
+
 
 - If `{useChromeMCP}`:
   - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
@@ -190,19 +181,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 #### ▶️ **Step 2: Identify Party Corporate Structure Relationships**
 
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing |
-> | **Status Message** | *(none — delegated to sub-steps)* |
-> | **Notification Rule** | Silent |
-
 ##### ▶️ **Step 2a: Find Party's Corporate Tree**
 
 > | Field | Value |
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🌳 Finding corporate structure... |
-> | **Notification Rule** | Show status message only — suppress all tool output and commentary |
+> | **Notification Rule** | Only show status. Do not show any commentary or narration |
 
 - Call `get_client_profile` using `{clientPartyId}` to retrieve `corporateTrees`
 - From the response, capture the `rootCompanyId` for each corporate tree
@@ -217,9 +202,9 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 > | Field | Value |
 > |---|---|
-> | **Type** | Processing |
-> | **Status Message** | *(none)* |
-> | **Notification Rule** | Silent |
+> | **Type** | Navigation |
+> | **Status Message** | 🌳 Finding corporate structure...|
+> | **Notification Rule** | Only show status. Do not show any commentary or narration |
 
 - If `{useChromeMCP}`:
   - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
@@ -239,7 +224,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Show status message only — suppress all tool output and commentary |
+> | **Notification Rule** | Only show status. Do not show any commentary or narration |
 
 - Reset `{relatedParties}` to initial zero state (all keys: `{ parties: 0, total: 0, list: [] }`)
 - For each `{treeGUO[#]}` in `{treeGUO[]}`:
@@ -271,8 +256,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > | Field | Value |
 > |---|---|
 > | **Type** | Processing |
-> | **Status Message** | *(none)* |
-> | **Notification Rule** | Silent |
+> | **Status Message** | 🔗 Identifying key corporate structure relationships... |
+> | **Notification Rule** | Only show status. Do not show any commentary or narration |
 
 <!--
 > ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, generate plausible dummy data simulating what these calls would return, and populate `{relatedParties}` accordingly.
@@ -300,8 +285,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > | Field | Value |
 > |---|---|
 > | **Type** | Processing |
-> | **Status Message** | *(none)* |
-> | **Notification Rule** | Silent |
+> | **Status Message** | 🔗 Identifying key corporate structure relationships... |
+> | **Notification Rule** | Only show status. Do not show any commentary or narration |
 
 - Flatten and deduplicate all `{relatedParties.[key].list}` entries into `{relatedPartiesTable[]}`, one object per unique `partyId`, aggregating all relationship keys the party appears under:
   ```
@@ -356,9 +341,9 @@ Below the table, display a coverage summary — repeat for any relationship wher
 
 > | Field | Value |
 > |---|---|
-> | **Type** | Display + User Prompt |
+> | **Type** | User Prompt |
 > | **Status Message** | *(none — display output is the communication)* |
-> | **Notification Rule** | Return results only — no preamble or commentary; display the options table and wait |
+> | **Notification Rule** | Only show prompt and options. Do not show commentary or narration |
 
 - For each relationship option below, evaluate using `{relatedParties}` and categorize:
 
@@ -404,8 +389,8 @@ Below the table, display a coverage summary — repeat for any relationship wher
 > | Field | Value |
 > |---|---|
 > | **Type** | Processing |
-> | **Status Message** | *(none)* |
-> | **Notification Rule** | Silent |
+> | **Status Message** | 🛡️ Creating request and conflicts search... |
+> | **Notification Rule** | Status message only. Do not show commentary or narration. |
 
 - Create a request with `intapp:create_request`
   - See Appendix C for API body/XML details
