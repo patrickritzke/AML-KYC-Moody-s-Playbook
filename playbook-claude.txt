@@ -94,7 +94,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   relatedParties.GUO:         { parties: #, total: #, list: [...] }
   relatedParties.Parent:      { parties: #, total: #, list: [...] }
   relatedParties.Subsidiary:  { parties: #, total: #, list: [...] }
-  relatedParties.Affiliate:   { parties: #, total: #, list: [...] }
+  relatedParties.Sibling:   { parties: #, total: #, list: [...] }
   relatedParties.Principal:   { parties: #, total: #, list: [...] }
   relatedParties.Shareholder: { parties: #, total: #, list: [...] }
   relatedParties.UBO:         { parties: #, total: #, list: [...] }
@@ -235,9 +235,9 @@ At all other moments — including between tool calls, during loops, and during 
     | Condition | `{relatedParties}` key |
     |---|---|
     | Node is the root ultimate owner of the tree | `GUO` |
-    | Node is an **ancestor** of the client (client is nested somewhere in node's `subCompanies`) | `Parent` |
+    | Node is a direct or indirect parent of the client going up to the GUO (and including the GUO) | `Parent` |
     | Node is a **descendant** of the client (node is nested in client's `subCompanies`) | `Subsidiary` |
-    | None of the above | `Affiliate` |
+    | None of the above | `Sibling` |
 
   - For every qualifying node:
     - Always increment `{relatedParties.[key].total}`
