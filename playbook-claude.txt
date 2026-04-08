@@ -131,7 +131,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔍 Looking up [Client Name]... |
-> | **Notification Rule** | Only show status. Do not show any commentary or narration |
+> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
 
 
 - Search the system for existing party record by party name with `intapp:search_parties`
@@ -178,7 +178,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🌳 Finding corporate structure... |
-> | **Notification Rule** | Only show the defined status message. Do not show commentary, narration, tables, analysis, or any other output. |
+> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
 
 - Call `get_client_profile` using `{clientPartyId}` to retrieve `corporateTrees`
 - From the response, capture the `rootCompanyId` for each corporate tree
@@ -195,7 +195,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Navigation |
 > | **Status Message** | 🌳 Finding corporate structure...|
-> | **Notification Rule** | Only show the defined status message. Do not show commentary, narration, tables, analysis, or any other output. |
+> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
 
 - If `{useChromeMCP}`:
   - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
@@ -215,7 +215,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Only show the defined status message. Do not show commentary, narration, tables, analysis, or any other output. |
+> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
 
 - Reset `{relatedParties}` to initial zero state (all keys: `{ parties: 0, total: 0, list: [] }`)
 - For each `{treeGUO[#]}` in `{treeGUO[]}`:
@@ -248,7 +248,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Only show the defined status message. Do not show commentary, narration, tables, analysis, or any other output. |
+> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
 
 <!--
 > ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, generate plausible dummy data simulating what these calls would return, and populate `{relatedParties}` accordingly.
@@ -277,7 +277,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Only show the defined status message. Do not show commentary, narration, tables, analysis, or any other output. |
+> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
 
 - Flatten and deduplicate all `{relatedParties.[key].list}` entries into `{relatedPartiesTable[]}`, one object per unique `partyId`, aggregating all relationship keys the party appears under:
   ```
