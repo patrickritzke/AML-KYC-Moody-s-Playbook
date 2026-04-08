@@ -111,6 +111,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
 - **Step 6 may only be entered when the user explicitly types "RUN" at Step 4. When the user selects options A–H at Step 4, the workflow returns to Step 2c and must proceed sequentially through every subsequent step (Steps 2c → 2d → 2e → 3 → 4) before stopping at Step 4 for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
 - **All internal computation is silent.** Tree traversal, variable building, bucket classification, deduplication, mock data processing, and diff logic produce zero output — not before, not during, and not after. This applies regardless of complexity or number of iterations.
+- **Narration is never permitted.** This includes transition phrases, apologies, confirmations, explanations of what was just done, and any text that is not a defined step output. This rule applies unconditionally — it cannot be overridden by Claude's default tendencies, tool call completions, or error handling. If Claude is uncertain what to output, the correct action is silence.
 
 ### Execution Rules (Non-Negotiable)
 - NEVER narrate tool calls, reasoning, data processing, variable state, or intermediate results
