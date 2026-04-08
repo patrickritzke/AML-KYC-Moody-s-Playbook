@@ -231,21 +231,13 @@ At all other moments — including between tool calls, during loops, and during 
     - `rootCompanyId` = `{treeGUO[#]}`
     - `providerType` = `{clientPartyExternalIdProvider}`
     - `properties` = `Parties`
-  - Recursively walk **all nodes** in the returned tree
-  - For every node in the tree, evaluate all conditions below independently. A node may satisfy more than one condition — increment every matching bucket. Do not stop at the first match.
-
-    | Condition | `{relatedParties}` key |
-    |---|---|
-    | Node is the root ultimate owner of the tree | `GUO` |
-    | Node is a direct or indirect parent of the client going up to the GUO (and including the GUO) | `Parent` |
-    |  Node appears in the client node's `subCompanies[]` array **directly* (i.e. the client is its immediate parent). Do NOT count grandchildren or deeper descendants — only depth = clientDepth + 1 where the client is the direct parent node.) | `Subsidiary` |
-    | Node is none of the above | `Sibling` |
-
-  - For every qualifying node:
-    - Always increment `{relatedParties.[key].total}`
-    - If node has a non-empty `parties[]` AND `partyId` != `{clientPartyId}`:
-      - Increment `{relatedParties.[key].parties}`
-      - Append `{ partyId, partyName, externalId }` to `{relatedParties.[key].list}`
+- **Pass 1 — Flat scan for party-bearing nodes:** Scan the entire tree JSON response in a single pass. Collect every node where `parties[]` is non-empty into a candidate list `{ externalId, name, partyId }`. Exclude the client node (`externalId` == `{clientPartyExternalId}`).
+  - **Pass 2 — Classify each candidate using parent-chain walks:**
+    - **GUO:** candidate `externalId` == `{treeGUO[#]}`. Increment `GUO.total`. If candidate has a non-empty `parties[]`, increment `GUO.parties` and append to `GUO.list`.
+    - **Parent:** Starting from the client node, walk up parent-by-parent through the tree. If this candidate is found anywhere on that upward path, classify as Parent. Increment `Parent.total`. If non-empty `parties[]`, increment `Parent.parties` and append to `Parent.list`.
+    - **Subsidiary:** Starting from the candidate node, walk up parent-by-parent. If the client node is found at exactly 1 step away, classify as Subsidiary (immediate). If found at >1 step away, classify as Subsidiary (indirect). Both map to the `Subsidiary` bucket. Increment `Subsidiary.total`. If non-empty `parties[]`, increment `Subsidiary.parties` and append to `Subsidiary.list`.
+    - **Sibling:** None of GUO, Parent, or Subsidiary matched. Increment `Sibling.total`. If non-empty `parties[]`, increment `Sibling.parties` and append to `Sibling.list`.
+  - Evaluate all four conditions independently for every candidate. A candidate may match multiple — increment every matching bucket. Do not stop at the first match.
 
 - After processing all trees, de-duplicate each `{relatedParties.[key].list}` on `partyId` and recalculate `{relatedParties.[key].parties}` to match
 - **GO TO** Step 2d
@@ -269,7 +261,7 @@ At all other moments — including between tool calls, during loops, and during 
   | `intapp:get_ubos` | `UBO` |
 
 - Apply **Appendix E — Multi-Source Relationship Rule** when classifying and counting nodes.
-- For each simulated response, walk all returned nodes and apply the following logic **in order**:
+- For each simulated response, scan the full response JSON in a single pass for every node where `parties[]` is non-empty, at any depth. Every such node is treated as belonging to that relationship type — no positional classification needed. Apply the following logic **in order** to each:
 
   1. **Check for existing tree entry** — look up the node's `externalId` across all entries already in every `{relatedParties.[key].list}` from Step 2c.
 
