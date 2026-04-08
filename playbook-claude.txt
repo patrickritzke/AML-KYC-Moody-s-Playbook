@@ -45,7 +45,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
     Parent:     { parties: 0, total: 0, list: [] },
     Subsidiary: { parties: 0, total: 0, list: [] },
     Sibling:  { parties: 0, total: 0, list: [] },
-    Principal:  { parties: 0, total: 0, list: [] },
+    Management/Board:  { parties: 0, total: 0, list: [] },
     Shareholder:{ parties: 0, total: 0, list: [] },
     UBO:        { parties: 0, total: 0, list: [] }
   }
@@ -260,7 +260,7 @@ At all other moments — including between tool calls, during loops, and during 
 
   | (Future) API Call | `{relatedParties}` key |
   |---|---|
-  | `intapp:get_principals` | `Principal` |
+  | `intapp:get_principals` | `Management/Board` |
   | `intapp:get_shareholders` | `Shareholder` |
   | `intapp:get_ubos` | `UBO` |
 
@@ -365,10 +365,9 @@ Display the following to the user:
 | *(A or blank)* | **Ultimate Parent** | *(X of Y included / X of X included / 0 available)* |
 | *(B or blank)* | **All Client's Parents** | *(X of Y included / X of X included / 0 available)* |
 | *(C or blank)* | **All Client's Immediate Subsidiaries** | *(X of Y included / X of X included / 0 available)* |
-| *(D or blank)* | **All Management** | *(X of Y included / X of X included / 0 available)* |
-| *(E or blank)* | **All Board Members** | *(X of Y included / X of X included / 0 available)* |
-| *(F or blank)* | **Shareholders w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
-| *(G or blank)* | **Beneficial Owners w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
+| *(D or blank)* | **Management & Board Members** | *(X of Y included / X of X included / 0 available)* |
+| *(E or blank)* | **Shareholders** | *(X of Y included / X of X included / 0 available)* |
+| *(F or blank)* | **Beneficial Owners** | *(X of Y included / X of X included / 0 available)* |
 
 ---
 
