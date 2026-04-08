@@ -266,17 +266,18 @@ At all other moments — including between tool calls, during loops, and during 
 - Apply **Appendix E — Multi-Source Relationship Rule** when classifying and counting nodes.
 - For each simulated response, scan the full response JSON in a single pass for every node where `parties[]` is non-empty, at any depth. Every such node is treated as belonging to that relationship type — no positional classification needed. Apply the following logic **in order** to each:
 
-  1. **Check for existing tree entry** — look up the node's `externalId` across all entries already in every `{relatedParties.[key].list}` from Step 2c.
+  1. **Always increment `{relatedParties.[key].total}`** — the entity is a real member of this relationship type regardless of where it was first seen.
 
-  2. **If a match is found** (entity already exists from the tree):
-     - Do **not** increment `total` or `parties` for the new key
+  2. **Check for an existing entry** — look up the node's `externalId` across all entries already in every `{relatedParties.[key].list}` from Step 2c **and** any prior Step 2d buckets already processed.
+
+  3. **If a match is found** (entity already tracked):
+     - Do **not** increment `{relatedParties.[key].parties}`
      - Do **not** add a new entry to the new key's `list[]`
      - Instead, make a note to add the new relationship label to this entity's `relationships[]` when building `{relatedPartiesTable[]}` in Step 2e
      - This entity will appear once in `{relatedPartiesTable[]}` with all relationship labels combined (e.g. `["GUO", "Shareholder"]`)
 
-  3. **If no match is found** (entity is new in this step):
-     - Increment `{relatedParties.[key].total}`
-     - If node has a non-empty `parties[]`: increment `{relatedParties.[key].parties}` and append `{ partyId, partyName, externalId }` to `{relatedParties.[key].list}`
+  4. **If no match is found** (entity is new in this step):
+     - Increment `{relatedParties.[key].parties}` and append `{ partyId, partyName, externalId }` to `{relatedParties.[key].list}`
 
 - De-duplicate each newly populated `list` on `partyId` and recalculate `parties` count to match
 - **GO TO** Step 2e
