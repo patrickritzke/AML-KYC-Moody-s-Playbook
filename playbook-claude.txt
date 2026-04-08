@@ -257,10 +257,7 @@ At all other moments — including between tool calls, during loops, and during 
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
 > | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
-<!--
-> ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, generate plausible dummy data simulating what these calls would return, and populate `{relatedParties}` accordingly.
--->
-> ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, just assume there are no relationships for these types (all counts 0)
+> ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, use the static mock responses from `mock_intapp_tool_responses.txt`. Only apply a mock response block if **both** `companyId` == `{clientPartyExternalId}` and `providerType` == `{clientPartyExternalIdProvider}`. If no block matches, assume all counts 0.
 
 - Using `{clientPartyId}`, simulate calls to the following (future) endpoints:
 
