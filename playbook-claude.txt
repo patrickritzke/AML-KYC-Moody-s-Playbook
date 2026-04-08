@@ -347,7 +347,7 @@ Display the following to the user:
   | Category | Criteria | Display Format |
   |---|---|---|
   | **Addable** | `{relatedParties.[key].parties}` < `{relatedParties.[key].total}` | Option letter + name + `(X of Y included)` |
-  | **Already Added** | `{relatedParties.[key].parties}` == `{relatedParties.[key].total}` AND `total` > 0 | No letter + ✅ + name + `(X of X included)` |
+  | **Already Added** | `{relatedParties.[key].parties}` >= `{relatedParties.[key].total}` AND `{relatedParties.[key].parties}` > 0 | No letter + ✅ + name + `(X of X included)` |
   | **Not Available** | `{relatedParties.[key].total}` == 0 | No letter + name + `(0 available)` |
 
 - Include option letters (A, B, C...) to **Addable** rows only. Always show the same option letter for the explicit option.
