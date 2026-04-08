@@ -277,7 +277,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Only show status. Do not show any commentary or narration |
+> | **Notification Rule** | Only show the defined status message. Do not show commentary, narration, tables, analysis, or any other output. |
 
 - Flatten and deduplicate all `{relatedParties.[key].list}` entries into `{relatedPartiesTable[]}`, one object per unique `partyId`, aggregating all relationship keys the party appears under:
   ```
