@@ -237,7 +237,7 @@ At all other moments — including between tool calls, during loops, and during 
     |---|---|
     | Node is the root ultimate owner of the tree | `GUO` |
     | Node is a direct or indirect parent of the client going up to the GUO (and including the GUO) | `Parent` |
-    | Node is a **descendant** of the client (node is nested in client's `subCompanies`) | `Subsidiary` |
+    | Node is a direct **descendant** of the client. The node must be nested 1 depth below in client's `subCompanies`. The client must be its immediate parent) | `Subsidiary` |
     | Node is none of the above | `Sibling` |
 
   - For every qualifying node:
@@ -368,13 +368,12 @@ Display the following to the user:
 | | Relationship | Coverage |
 |---|---|---|
 | *(A or blank)* | **Ultimate Parent** | *(X of Y included / X of X included / 0 available)* |
-| *(B or blank)* | **Client's Immediate Parent** | *(X of Y included / X of X included / 0 available)* |
-| *(C or blank)* | **All Client's Parents** | *(X of Y included / X of X included / 0 available)* |
-| *(D or blank)* | **All Client's Immediate Subsidiaries** | *(X of Y included / X of X included / 0 available)* |
-| *(E or blank)* | **All Management** | *(X of Y included / X of X included / 0 available)* |
-| *(F or blank)* | **All Board Members** | *(X of Y included / X of X included / 0 available)* |
-| *(G or blank)* | **Shareholders w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
-| *(H or blank)* | **Beneficial Owners w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
+| *(B or blank)* | **All Client's Parents** | *(X of Y included / X of X included / 0 available)* |
+| *(C or blank)* | **All Client's Immediate Subsidiaries** | *(X of Y included / X of X included / 0 available)* |
+| *(D or blank)* | **All Management** | *(X of Y included / X of X included / 0 available)* |
+| *(E or blank)* | **All Board Members** | *(X of Y included / X of X included / 0 available)* |
+| *(F or blank)* | **Shareholders w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
+| *(G or blank)* | **Beneficial Owners w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
 
 ---
 
