@@ -232,11 +232,14 @@ At all other moments — including between tool calls, during loops, and during 
     - `providerType` = `{clientPartyExternalIdProvider}`
     - `properties` = `Parties`
 - **Pass 1 — Flat scan for party-bearing nodes:** Scan the entire tree JSON response in a single pass. Collect every node where `parties[]` is non-empty into a candidate list `{ externalId, name, partyId }`. Exclude the client node (`externalId` == `{clientPartyExternalId}`).
-  - **Pass 2 — Classify each candidate using parent-chain walks:**
-    - **GUO:** candidate `externalId` == `{treeGUO[#]}`. Increment `GUO.total`. If candidate has a non-empty `parties[]`, increment `GUO.parties` and append to `GUO.list`.
-    - **Parent:** Starting from the client node, walk up parent-by-parent through the tree. If this candidate is found anywhere on that upward path, classify as Parent. Increment `Parent.total`. If non-empty `parties[]`, increment `Parent.parties` and append to `Parent.list`.
-    - **Subsidiary:** Starting from the candidate node, walk up parent-by-parent. If the client node is found at exactly 1 step away, classify as Subsidiary (immediate). If found at >1 step away, classify as Subsidiary (indirect). Both map to the `Subsidiary` bucket. Increment `Subsidiary.total`. If non-empty `parties[]`, increment `Subsidiary.parties` and append to `Subsidiary.list`.
-    - **Sibling:** None of GUO, Parent, or Subsidiary matched. Increment `Sibling.total`. If non-empty `parties[]`, increment `Sibling.parties` and append to `Sibling.list`.
+- **Pass 2 — Classify each candidate using parent-chain walks:**
+    - First, build a parent index by traversing the tree top-down through `subCompanies[]`. For every node record its parent's `externalId`.
+    - Then evaluate all four conditions below independently for each candidate. Collect every matching bucket label into a set — do not stop at the first match:
+      - **GUO:** candidate `externalId` == `{treeGUO[#]}`
+      - **Parent:** Starting from the client node, walk up via the parent index. If this candidate appears anywhere on that path, label Parent.
+      - **Subsidiary:** Starting from the candidate node, walk up via the parent index. If the client node is found exactly 1 step away, label Subsidiary. If found >1 step away, label Subsidiary. Both are the same bucket.
+      - **Sibling:** None of GUO, Parent, or Subsidiary matched.
+    - After all labels are determined for the candidate, increment `total` and (if `parties[]` non-empty) `parties` and `list` once per matching bucket — one increment per bucket, applied after classification is complete.
   - Evaluate all four conditions independently for every candidate. A candidate may match multiple — increment every matching bucket. Do not stop at the first match.
 
 - After processing all trees, de-duplicate each `{relatedParties.[key].list}` on `partyId` and recalculate `{relatedParties.[key].parties}` to match
