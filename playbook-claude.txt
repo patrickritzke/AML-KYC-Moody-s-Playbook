@@ -111,14 +111,20 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
 - **Step 6 may only be entered when the user explicitly types "RUN" at Step 4. When the user selects options A–H at Step 4, the workflow returns to Step 2c and must proceed sequentially through every subsequent step (Steps 2c → 2d → 2e → 3 → 4) before stopping at Step 4 for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
 
-### Communication Preferences
-- **Execution mode:** Silent execution with minimal updates
-- **Status updates:** Don't display outside of friendly messages
-- **Preambles:** None — proceed directly to work
-- **Summaries:** No step-level summaries or confirmations. Proceed directly to the next step unless user input is required. Final summary only at the end of the full workflow.
-- **Tool/task visibility:** Do not display raw tool names, task counts, or execution details. Instead show a single friendly status line at each major milestone.
-- **Task list visibility:** Do not display task lists, task counts, or task progress indicators at any point during the workflow. Execute silently without surfacing the task plan to the user.
-- **Only display the friendly status messages defined in for the step. Do not display any other status updates, confirmations, progress indicators, or commentary at any point during the workflow — including on loop iterations.**
+### Execution Rules (Non-Negotiable)
+- NEVER narrate tool calls, reasoning, data processing, variable state, or intermediate results
+- NEVER explain what you are about to do or just did
+- NEVER output any text between receiving tool results and the next defined step output
+- The ONLY permitted outputs are: (a) the exact status message defined for the current step, and (b) the exact display output defined for display steps
+- Silence between steps is correct. Narration between steps is a violation.
+
+### Output Contract
+Claude produces output ONLY at these moments:
+1. The single status message at the start of a Processing step
+2. The full defined display at a Display step
+3. A user prompt at a User Prompt step
+
+At all other moments — including between tool calls, during loops, and during variable computation — output is ZERO. No exceptions.
 
 ---
 
@@ -131,7 +137,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔍 Looking up [Client Name]... |
-> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
+> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 
 - Search the system for existing party record by party name with `intapp:search_parties`
@@ -178,7 +184,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🌳 Finding corporate structure... |
-> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
+> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 - Call `get_client_profile` using `{clientPartyId}` to retrieve `corporateTrees`
 - From the response, capture the `rootCompanyId` for each corporate tree
@@ -195,7 +201,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Navigation |
 > | **Status Message** | 🌳 Finding corporate structure...|
-> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
+> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 - If `{useChromeMCP}`:
   - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
@@ -215,7 +221,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
+> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 - Reset `{relatedParties}` to initial zero state (all keys: `{ parties: 0, total: 0, list: [] }`)
 - For each `{treeGUO[#]}` in `{treeGUO[]}`:
@@ -248,7 +254,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
+> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 <!--
 > ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, generate plausible dummy data simulating what these calls would return, and populate `{relatedParties}` accordingly.
@@ -277,7 +283,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Execute silently. Output nothing — no status messages, no tool call narration, no analysis, no reasoning, no intermediate results. The only permitted output for this step is the status message defined above, shown once before execution begins. |
+> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 - Flatten and deduplicate all `{relatedParties.[key].list}` entries into `{relatedPartiesTable[]}`, one object per unique `partyId`, aggregating all relationship keys the party appears under:
   ```
