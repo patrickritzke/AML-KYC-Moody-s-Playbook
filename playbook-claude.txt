@@ -77,8 +77,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `{conID}` — ID of the created conflicts search
 
 #### Runtime Flags
-*Set at workflow start*
-- `{useChromeMCP}` — `TRUE` if Chrome MCP is available; `FALSE` if unavailable or call fails. Evaluated once at startup and never re-evaluated.
+- `{useChromeMCP}` — `TRUE` if Chrome MCP is available; `FALSE` if unavailable or call fails. Evaluated again at each step when required. 
 
 ---
 
@@ -340,7 +339,9 @@ Display the following to the user:
   | **Already Added** | `{relatedParties.[key].parties}` == `{relatedParties.[key].total}` AND `total` > 0 | No letter + ✅ + name + `(X of X included)` |
   | **Not Available** | `{relatedParties.[key].total}` == 0 | No letter + name + `(0 available)` |
 
-- Assign option letters sequentially (A, B, C...) to **Addable** rows only, skipping Already Added and Not Available rows
+- Include option letters (A, B, C...) to **Addable** rows only. Always show the same option letter for the explicit option.
+- Always inlclude every row (do not remove or add)
+- Use these explicit labels for relationship. Only update coverage numbers.
 - Display the following prompt:
 
 ---
@@ -349,14 +350,14 @@ Display the following to the user:
 
 | | Relationship | Coverage |
 |---|---|---|
-| *(letter or blank)* | **Ultimate Parent** | *(X of Y included / X of X included / 0 available)* |
-| *(letter or blank)* | **Client's Immediate Parent** | *(X of Y included / X of X included / 0 available)* |
-| *(letter or blank)* | **All Client's Parents** | *(X of Y included / X of X included / 0 available)* |
-| *(letter or blank)* | **All Client's Immediate Subsidiaries** | *(X of Y included / X of X included / 0 available)* |
-| *(letter or blank)* | **All Management** | *(X of Y included / X of X included / 0 available)* |
-| *(letter or blank)* | **All Board Members** | *(X of Y included / X of X included / 0 available)* |
-| *(letter or blank)* | **Shareholders w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
-| *(letter or blank)* | **Beneficial Owners w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
+| *(A or blank)* | **Ultimate Parent** | *(X of Y included / X of X included / 0 available)* |
+| *(B or blank)* | **Client's Immediate Parent** | *(X of Y included / X of X included / 0 available)* |
+| *(C or blank)* | **All Client's Parents** | *(X of Y included / X of X included / 0 available)* |
+| *(D or blank)* | **All Client's Immediate Subsidiaries** | *(X of Y included / X of X included / 0 available)* |
+| *(E or blank)* | **All Management** | *(X of Y included / X of X included / 0 available)* |
+| *(F or blank)* | **All Board Members** | *(X of Y included / X of X included / 0 available)* |
+| *(G or blank)* | **Shareholders w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
+| *(H or blank)* | **Beneficial Owners w/ known ownership ≥10%** | *(X of Y included / X of X included / 0 available)* |
 
 ---
 
