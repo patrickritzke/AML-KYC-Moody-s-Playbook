@@ -44,7 +44,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
     GUO:        { parties: 0, total: 0, list: [] },
     Parent:     { parties: 0, total: 0, list: [] },
     Subsidiary: { parties: 0, total: 0, list: [] },
-    Affiliate:  { parties: 0, total: 0, list: [] },
+    Sibling:  { parties: 0, total: 0, list: [] },
     Principal:  { parties: 0, total: 0, list: [] },
     Shareholder:{ parties: 0, total: 0, list: [] },
     UBO:        { parties: 0, total: 0, list: [] }
