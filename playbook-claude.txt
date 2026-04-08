@@ -110,6 +110,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 ### Overall Behavior Rules
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
 - **Step 6 may only be entered when the user explicitly types "RUN" at Step 4. When the user selects options A–H at Step 4, the workflow returns to Step 2c and must proceed sequentially through every subsequent step (Steps 2c → 2d → 2e → 3 → 4) before stopping at Step 4 for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
+- **All internal computation is silent.** Tree traversal, variable building, bucket classification, deduplication, mock data processing, and diff logic produce zero output — not before, not during, and not after. This applies regardless of complexity or number of iterations.
 
 ### Execution Rules (Non-Negotiable)
 - NEVER narrate tool calls, reasoning, data processing, variable state, or intermediate results
@@ -221,7 +222,7 @@ At all other moments — including between tool calls, during loops, and during 
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
+> | **Notification Rule** | Zero output permitted during this step. All mock data parsing, node matching, deduplication, and variable updates are silent internal computation. Do not narrate, summarize, or describe any of this work — not before it, not after it, and not between tool calls. | 
 
 - Reset `{relatedParties}` to initial zero state (all keys: `{ parties: 0, total: 0, list: [] }`)
  Apply **Appendix E — Multi-Source Relationship Rule** when classifying and counting nodes.
@@ -255,7 +256,7 @@ At all other moments — including between tool calls, during loops, and during 
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
+> |  **Notification Rule** | Zero output permitted during this step. All mock data parsing, node matching, deduplication, and variable updates are silent internal computation. Do not narrate, summarize, or describe any of this work — not before it, not after it, and not between tool calls. |
 
 > ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, use the static mock responses from `mock_intapp_tool_responses.txt`. Only apply a mock response block if **both** `companyId` == `{clientPartyExternalId}` and `providerType` == `{clientPartyExternalIdProvider}`. If no block matches, assume all counts 0.
 
@@ -291,7 +292,7 @@ At all other moments — including between tool calls, during loops, and during 
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
+> | **Notification Rule** | Zero output permitted during this step. All mock data parsing, node matching, deduplication, and variable updates are silent internal computation. Do not narrate, summarize, or describe any of this work — not before it, not after it, and not between tool calls. | 
 
 - Flatten and deduplicate all `{relatedParties.[key].list}` entries into `{relatedPartiesTable[]}`, one object per unique `partyId`, aggregating all relationship keys the party appears under:
   ```
