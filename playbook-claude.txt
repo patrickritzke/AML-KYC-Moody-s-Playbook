@@ -224,20 +224,21 @@ At all other moments — including between tool calls, during loops, and during 
 > | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 - Reset `{relatedParties}` to initial zero state (all keys: `{ parties: 0, total: 0, list: [] }`)
+ Apply **Appendix E — Multi-Source Relationship Rule** when classifying and counting nodes.
 - For each `{treeGUO[#]}` in `{treeGUO[]}`:
   - Call `intapp:get_corporate_tree` with:
     - `rootCompanyId` = `{treeGUO[#]}`
     - `providerType` = `{clientPartyExternalIdProvider}`
     - `properties` = `Parties`
   - Recursively walk **all nodes** in the returned tree
-  - For every node, evaluate its structural relationship to `{clientPartyExternalId}` and update `{relatedParties}` accordingly:
+  - For every node in the tree, evaluate all conditions below independently. A node may satisfy more than one condition — increment every matching bucket. Do not stop at the first match.
 
     | Condition | `{relatedParties}` key |
     |---|---|
     | Node is the root ultimate owner of the tree | `GUO` |
     | Node is a direct or indirect parent of the client going up to the GUO (and including the GUO) | `Parent` |
     | Node is a **descendant** of the client (node is nested in client's `subCompanies`) | `Subsidiary` |
-    | None of the above | `Sibling` |
+    | Node is none of the above | `Sibling` |
 
   - For every qualifying node:
     - Always increment `{relatedParties.[key].total}`
@@ -269,11 +270,21 @@ At all other moments — including between tool calls, during loops, and during 
   | `intapp:get_shareholders` | `Shareholder` |
   | `intapp:get_ubos` | `UBO` |
 
-- For each simulated response, walk all returned nodes:
-  - Always increment `{relatedParties.[key].total}`
-  - If node has a non-empty `parties[]`:
-    - Increment `{relatedParties.[key].parties}`
-    - Append `{ partyId, partyName, externalId }` to `{relatedParties.[key].list}`
+- Apply **Appendix E — Multi-Source Relationship Rule** when classifying and counting nodes.
+- For each simulated response, walk all returned nodes and apply the following logic **in order**:
+
+  1. **Check for existing tree entry** — look up the node's `externalId` across all entries already in every `{relatedParties.[key].list}` from Step 2c.
+
+  2. **If a match is found** (entity already exists from the tree):
+     - Do **not** increment `total` or `parties` for the new key
+     - Do **not** add a new entry to the new key's `list[]`
+     - Instead, make a note to add the new relationship label to this entity's `relationships[]` when building `{relatedPartiesTable[]}` in Step 2e
+     - This entity will appear once in `{relatedPartiesTable[]}` with all relationship labels combined (e.g. `["GUO", "Shareholder"]`)
+
+  3. **If no match is found** (entity is new in this step):
+     - Increment `{relatedParties.[key].total}`
+     - If node has a non-empty `parties[]`: increment `{relatedParties.[key].parties}` and append `{ partyId, partyName, externalId }` to `{relatedParties.[key].list}`
+
 - De-duplicate each newly populated `list` on `partyId` and recalculate `parties` count to match
 - **GO TO** Step 2e
 
@@ -574,3 +585,13 @@ Playbook ended but not completed.
   ]
 }
 ```
+### Appendix E. Multi-Source Relationship Rule
+
+Relationship buckets are **non-exclusive** — a single entity can and should be recorded
+in multiple buckets simultaneously. Evaluate all bucket conditions for every entity
+regardless of source; do not stop at the first match.
+
+**Example:** The GUO is always also a Parent. If it additionally appears in the
+shareholders list, it holds three relationships at once: `["GUO", "Parent", "Shareholder"]`.
+It appears as a single row in `{relatedPartiesTable[]}` with all three labels — never
+as duplicate rows, and never counted more than once toward any bucket's `total`.
