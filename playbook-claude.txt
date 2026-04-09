@@ -467,7 +467,7 @@ Playbook ended but not completed.
 *(one entry per `{relatedPartiesTable[]}` entry, plus the client)*
 ```json
 {
-  "name": "AML KYC - Moody's GRID Screen for {clientPartyName}",
+  "name": "AML KYC - Moody's GRID Screen for {clientPartyName} for Request {reqId}",
   "requestId": "{reqID}",
   "searchTerms": [
     { "affiliationType": "{clientPartyConAff}", "name": "{clientPartyName}", "partyId": "{clientPartyId}" },
