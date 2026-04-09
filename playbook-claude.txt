@@ -180,141 +180,35 @@ At all other moments — including between tool calls, during loops, and during 
 
 #### ▶️ **Step 2: Identify Party Corporate Structure Relationships**
 
-##### ▶️ **Step 2a: Find Party's Corporate Tree**
-
 > | Field | Value |
 > |---|---|
 > | **Type** | Processing |
 > | **Status Message** | 🌳 Finding corporate structure... |
 > | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
-- Call `get_client_profile` using `{clientPartyId}` to retrieve `corporateTrees`
-- From the response, capture the `rootCompanyId` for each corporate tree
-  - If not found → **GO TO** Step END
-  - If found:
-    - Set `{treeGUO[]}` for all found root company IDs
-    - Set `{clientPartyExternalIdProvider}` to the provider that matches the tree source
-    - Set `{clientPartyExternalId}` to the ID on the client party profile corresponding to `{clientPartyExternalIdProvider}`
-    - **GO TO** Step 2b
-
-##### ▶️ **Step 2b: Open Corporate Tree Page**
-
-> | Field | Value |
-> |---|---|
-> | **Type** | Navigation |
-> | **Status Message** | 🌳 Finding corporate structure...|
-> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
-
-- If `{useChromeMCP}`:
-  - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
-  - If the call fails:
-    - Set `{useChromeMCP}` = `FALSE`
-    - **GO TO** Step 2c
-  - If the call succeeds:
-    - If no `{yourhost}` tab found → **GO TO** Step 2c
-    - If a `{yourhost}` tab is active:
-      - Open `https://{yourhost}/app/app/index.html#/corporate-tree?partyId={clientPartyId}&externalId={clientPartyExternalId}&providerType={clientPartyExternalIdProvider}`
-      - **GO TO** Step 2c
-- **GO TO** Step 2c
-
-##### ▶️ **Step 2c: Find Other Existing Intapp Parties in Corporate Tree(s)**
-
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing |
-> | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Zero output permitted during this step. All mock data parsing, node matching, deduplication, and variable updates are silent internal computation. Do not narrate, summarize, or describe any of this work — not before it, not after it, and not between tool calls. | 
-
-- Reset `{relatedParties}` to initial zero state (all keys: `{ parties: 0, total: 0, list: [] }`)
- Apply **Appendix E — Multi-Source Relationship Rule** when classifying and counting nodes.
-- For each `{treeGUO[#]}` in `{treeGUO[]}`:
-  - Call `intapp:get_corporate_tree` with:
-    - `rootCompanyId` = `{treeGUO[#]}`
-    - `providerType` = `{clientPartyExternalIdProvider}`
-    - `properties` = `Parties`
-- **Pass 1 — Flat scan for party-bearing nodes:** Scan the entire tree JSON response in a single pass. Collect every node where `parties[]` is non-empty into a candidate list `{ externalId, name, partyId }`. Exclude the client node (`externalId` == `{clientPartyExternalId}`).
-- **Pass 2 — Classify each candidate using parent-chain walks:**
-    - First, build a parent index by traversing the tree top-down through `subCompanies[]`. For every node record its parent's `externalId`.
-    - Then evaluate all four conditions below independently for each candidate. Collect every matching bucket label into a set — do not stop at the first match:
-      - **GUO:** candidate `externalId` == `{treeGUO[#]}`
-      - **Parent:** Starting from the client node, walk up via the parent index. If this candidate appears anywhere on that path, label Parent.
-      - **Subsidiary:** Starting from the candidate node, walk up via the parent index. If the client node is found exactly 1 step away, label Subsidiary. If found >1 step away, label Subsidiary. Both are the same bucket.
-      - **Sibling:** None of GUO, Parent, or Subsidiary matched.
-    - After all labels are determined for the candidate, increment `total` and (if `parties[]` non-empty) `parties` and `list` once per matching bucket — one increment per bucket, applied after classification is complete.
-  - Evaluate all four conditions independently for every candidate. A candidate may match multiple — increment every matching bucket. Do not stop at the first match.
-
-- After processing all trees, de-duplicate each `{relatedParties.[key].list}` on `partyId` and recalculate `{relatedParties.[key].parties}` to match
-- **GO TO** Step 2d
-
-##### ▶️ **Step 2d: Find Existing Intapp Parties in Other Corporate Structure Relationships**
-
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing |
-> | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> |  **Notification Rule** | Zero output permitted during this step. All mock data parsing, node matching, deduplication, and variable updates are silent internal computation. Do not narrate, summarize, or describe any of this work — not before it, not after it, and not between tool calls. |
-
-> ⚠️ **Mock Step** — The APIs listed below do not yet support this functionality. Do **not** invoke any tools. Instead, use the static mock responses from `mock_intapp_tool_responses.txt`. Only apply a mock response block if **both** `companyId` == `{clientPartyExternalId}` and `providerType` == `{clientPartyExternalIdProvider}`. If no block matches, assume all counts 0.
-
-- Using `{clientPartyId}`, simulate calls to the following (future) endpoints:
-
-  | (Future) API Call | `{relatedParties}` key |
-  |---|---|
-  | `intapp:get_principals` | `Management/Board` |
-  | `intapp:get_shareholders` | `Shareholder` |
-  | `intapp:get_ubos` | `UBO` |
-
-- Apply **Appendix E — Multi-Source Relationship Rule** when classifying and counting nodes.
-- For each simulated response, scan the full response JSON in a single pass for every node where `parties[]` is non-empty, at any depth. Every such node is treated as belonging to that relationship type — no positional classification needed. Apply the following logic **in order** to each:
-
-  1. **Always increment `{relatedParties.[key].total}`** — the entity is a real member of this relationship type regardless of where it was first seen.
-
-  2. **Check for an existing entry** — look up the node's `externalId` across all entries already in every `{relatedParties.[key].list}` from Step 2c **and** any prior Step 2d buckets already processed.
-
-  3. **If a match is found** (entity already tracked):
-     - Do **not** increment `{relatedParties.[key].parties}`
-     - Do **not** add a new entry to the new key's `list[]`
-     - Instead, make a note to add the new relationship label to this entity's `relationships[]` when building `{relatedPartiesTable[]}` in Step 2e
-     - This entity will appear once in `{relatedPartiesTable[]}` with all relationship labels combined (e.g. `["GUO", "Shareholder"]`)
-
-  4. **If no match is found** (entity is new in this step):
-     - Increment `{relatedParties.[key].parties}` and append `{ partyId, partyName, externalId }` to `{relatedParties.[key].list}`
-
-- De-duplicate each newly populated `list` on `partyId` and recalculate `parties` count to match
-- **GO TO** Step 2e
-
-##### ▶️ **Step 2e: Consolidate Related Parties into Summary Variable**
-
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing |
-> | **Status Message** | 🔗 Identifying key corporate structure relationships... |
-> | **Notification Rule** | Zero output permitted during this step. All mock data parsing, node matching, deduplication, and variable updates are silent internal computation. Do not narrate, summarize, or describe any of this work — not before it, not after it, and not between tool calls. | 
-
-- Flatten and deduplicate all `{relatedParties.[key].list}` entries into `{relatedPartiesTable[]}`, one object per unique `partyId`, aggregating all relationship keys the party appears under:
-  ```
-  {relatedPartiesTable[]} = [
-    {
-      partyId:       string,
-      partyName:     string,
-      externalId:    string,
-      relationships: string[],   // all {relatedParties} keys this partyId appears in
-      isNew:         boolean      // true if partyId is in {newlyCreatedParties[]}
-    }
-  ]
-  ```
-- Set `isNew = true` for any `partyId` found in `{newlyCreatedParties[]}`
+- Call `intapp:get_corp_structure_party_relationships` with:
+  - `party_id` = `{clientPartyId}`
+  - `include_non_parties` = `false` (if user opted in to review missing parties)
+- From the response, capture:
+  - `{clientExternalId}` and `{providerType}`
+  - `{relatedParties}` — per-bucket counts and `partiesList` of matched Intapp parties
+  - `{relatedParties.[key].nonPartiesList}` — unmatched entities per bucket (when `include_non_parties` = true)
+- If no corporate trees found → **GO TO** Step END
 - **GO TO** Step 3
 
 ---
 
-#### ▶️ **Step 3: Display Client & Key Corporate Structure Relationships**
+#### ▶️ Step 3: Display Client & Key Corporate Structure Relationships
 
-> | Field | Value |
-> |---|---|
-> | **Type** | Display |
-> | **Status Message** | *(none — display output is the communication)* |
-> | **Notification Rule** | Return ONLY the display specified below. Do not add commentary, preamble, or narration of any kind |
+| Field | Value |
+|---|---|
+| **Type** | Display |
+| **Status Message** | *(none — display output is the communication)* |
+| **Notification Rule** | Return ONLY the display specified below. Do not add commentary, preamble, or narration of any kind |
+
+- Build the table from `{relatedParties}`: iterate each bucket (GUO, Parent, Subsidiary, Sibling, Management/Board, Shareholder, UBO), collect all entries from each `partiesList`, group by `partyId`, and merge relationship labels for any party that appears in multiple buckets.
+  - See **Appendix F** for `{relatedParties}` full schema.
+
 
 Display the following to the user:
 
@@ -326,35 +220,38 @@ Display the following to the user:
 
 | Party Name (ID) | Relationship(s) |
 |---|---|
-| 🆕 🔹 `{partyName}` (`{partyId}`) *(if `isNew` = true)* | `{relationships[]}` comma-separated |
-| 🔹 `{partyName}` (`{partyId}`) *(if `isNew` = false)* | `{relationships[]}` comma-separated |
+| 🔹 `{partyName}` (`{partyId}`) | `{relationships[]}` comma-separated |
 
 ---
 
-- **GO TO** Step 4
+**GO TO** Step 4
 
 ---
 
-#### ▶️ **Step 4: Prompt User to Add More Key Corporate Structure Relationships to Screen**
+#### ▶️ Step 4: Prompt User to Add More Key Corporate Structure Relationships to Screen
 
-> | Field | Value |
-> |---|---|
-> | **Type** | User Prompt |
-> | **Status Message** | *(none — display output is the communication)* |
-> | **Notification Rule** | Only show prompt and options. Do not show commentary or narration |
+| Field | Value |
+|---|---|
+| **Type** | User Prompt |
+| **Status Message** | *(none — display output is the communication)* |
+| **Notification Rule** | Only show prompt and options. Do not show commentary or narration |
 
 - For each relationship option below, evaluate using `{relatedParties}` and categorize:
+  - See **Appendix F** for `{relatedParties}` full schema.
 
-  | Category | Criteria | Display Format |
-  |---|---|---|
-  | **Addable** | `{relatedParties.[key].parties}` < `{relatedParties.[key].total}` | Option letter + name + `(X of Y included)` |
-  | **Already Added** | `{relatedParties.[key].parties}` >= `{relatedParties.[key].total}` AND `{relatedParties.[key].parties}` > 0 | No letter + ✅ + name + `(X of X included)` |
-  | **Not Available** | `{relatedParties.[key].total}` == 0 | No letter + name + `(0 available)` |
+For each relationship option below, evaluate using `{relatedParties}` and categorize:
+
+| Category | Criteria | Display Format |
+|---|---|---|
+| **Addable** | `{relatedParties.[key].parties}` < `{relatedParties.[key].total}` | Option letter + name + `(X of Y included)` |
+| **Already Added** | `{relatedParties.[key].parties}` >= `{relatedParties.[key].total}` AND `{relatedParties.[key].parties}` > 0 | No letter + ✅ + name + `(X of X included)` |
+| **Not Available** | `{relatedParties.[key].total}` == 0 | No letter + name + `(0 available)` |
 
 - Include option letters (A, B, C...) to **Addable** rows only. Always show the same option letter for the explicit option.
-- Always inlclude every row (do not remove or add)
+- Always include every row (do not remove or add).
 - Use these explicit labels for relationship. Only update coverage numbers.
-- Display the following prompt:
+
+Display the following prompt:
 
 ---
 
@@ -371,14 +268,15 @@ Display the following to the user:
 
 ---
 
-- WAIT for user input:
-  - If user types one or more option letters:
-    - For each selected relationship, identify all `externalId`s in `{relatedParties.[key].list}` that are **not** yet Intapp parties (i.e. not in any `list[]`)
-    - For each non-party entity, call `intapp:create_party` to create it
-      - On success, append `partyId` to `{newlyCreatedParties[]}`
-      - On failure, note the error and continue with remaining entities
-    - Once all creation attempts complete → **GO TO** Step 2c and proceed sequentially through Steps 2c → 2d → 2e → 3 → 4
-  - If user types `RUN` → **GO TO** Step 5
+WAIT for user input:
+
+- If user types one or more option letters:
+  - For each selected relationship, identify all `externalId`s in `{relatedParties.[key].list}` that are **not** yet Intapp parties (i.e. not in any `list[]`)
+  - For each non-party entity, call `intapp:create_party` to create it
+    - On success, append `partyId` to `{newlyCreatedParties[]}`
+    - On failure, note the error and continue with remaining entities
+  - Once all creation attempts complete → **GO TO** Step 2c and proceed sequentially through Steps 2 → 3 → 4
+- If user types `RUN` → **GO TO** Step 5
 
 ---
 
@@ -588,3 +486,25 @@ regardless of source; do not stop at the first match.
 shareholders list, it holds three relationships at once: `["GUO", "Parent", "Shareholder"]`.
 It appears as a single row in `{relatedPartiesTable[]}` with all three labels — never
 as duplicate rows, and never counted more than once toward any bucket's `total`.
+
+### Appendix F. intapp:get_corp_structure_party_relationships tool relatedParties Schema
+
+\`\`\`json
+{
+  "clientExternalId": "",
+  "providerType": "",
+  "relatedParties": {
+    "GUO":                { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "Parent":             { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "Subsidiary":         { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "Sibling":            { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "Management/Board":   { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "Shareholder":        { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "UBO":                { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] }
+  }
+}
+\`\`\`
+
+- `partiesList[]` entries: `{ "partyId": "", "partyName": "", "externalId": "" }`
+- `nonPartiesList[]` entries: `{ "externalId": "", "name": "" }`
+
