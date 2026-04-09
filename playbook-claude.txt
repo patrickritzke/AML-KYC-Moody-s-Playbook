@@ -39,40 +39,27 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 #### Related Parties
 - `{relatedParties}` — Single object tracking all corporate structure relationships. Each key holds a count of all entities (`total`), a count of those already Intapp parties (`parties`), and the list of matched party records (`list`):
-  ```
-  {relatedParties} = {
-    GUO:        { parties: 0, total: 0, list: [] },
-    Parent:     { parties: 0, total: 0, list: [] },
-    Subsidiary: { parties: 0, total: 0, list: [] },
-    Sibling:  { parties: 0, total: 0, list: [] },
-    Management/Board:  { parties: 0, total: 0, list: [] },
-    Shareholder:{ parties: 0, total: 0, list: [] },
-    UBO:        { parties: 0, total: 0, list: [] }
+
+\`\`\`json
+{
+  "clientExternalId": "",
+  "providerType": "",
+  "relatedParties": {
+    "GUO":                { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "Parent":             { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "Subsidiary":         { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "Sibling":            { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "Management/Board":   { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "Shareholder":        { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] },
+    "UBO":                { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] }
   }
-  ```
-  - `list[]` entries: `{ partyId, partyName, externalId }`
-  - Increment `total` for every qualifying node regardless of Intapp party status
-  - Increment `parties` and append to `list` only when node has a matched Intapp party
+}
+\`\`\`
 
-- `{relatedPartiesTable[]}` — Flattened, deduplicated array built in Step 2e for display and downstream use:
-  ```
-  {relatedPartiesTable[]} = [
-    {
-      partyId:       string,
-      partyName:     string,
-      externalId:    string,
-      relationships: string[],
-      isNew:         boolean
-    }
-  ]
-  ```
-
-#### Newly Created Parties
-*Initialized at workflow start, appended on each successful `intapp:create_party` call in Step 4*
-- `{newlyCreatedParties[]}` = `[]` — flat array of `partyId` strings for parties created during this workflow run
+- `partiesList[]` entries: `{ "partyId": "", "partyName": "", "externalId": "" }`
+- `nonPartiesList[]` entries: `{ "externalId": "", "name": "" }`
 
 #### Request & Conflicts
-*Set in Step 5*
 - `{reqID}` — ID of the created request
 - `{conID}` — ID of the created conflicts search
 
@@ -91,15 +78,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   clientPartyExternalId:      [value]
   clientPartyExternalIdProvider: [value]
   treeGUO[]:                  [value]
-  relatedParties.GUO:         { parties: #, total: #, list: [...] }
-  relatedParties.Parent:      { parties: #, total: #, list: [...] }
-  relatedParties.Subsidiary:  { parties: #, total: #, list: [...] }
-  relatedParties.Sibling:   { parties: #, total: #, list: [...] }
-  relatedParties.Principal:   { parties: #, total: #, list: [...] }
-  relatedParties.Shareholder: { parties: #, total: #, list: [...] }
-  relatedParties.UBO:         { parties: #, total: #, list: [...] }
-  relatedPartiesTable[]:      [count] entries
-  newlyCreatedParties[]:      [value]
+  relatedParties.GUO:         { parties: #, total: #, partieslist: [...] }
+  relatedParties.Parent:      { parties: #, total: #, partieslist: [...] }
+  relatedParties.Subsidiary:  { parties: #, total: #, partieslist: [...] }
+  relatedParties.Sibling:   { parties: #, total: #, partieslist: [...] }
+  relatedParties.Principal:   { parties: #, total: #, partieslist: [...] }
+  relatedParties.Shareholder: { parties: #, total: #, partieslist: [...] }
+  relatedParties.UBO:         { parties: #, total: #, partieslist: [...] }
   reqID:                      [value]
   conID:                      [value]
   useChromeMCP:               [value]
