@@ -69,13 +69,17 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `{moodysHitEvents}` — Array of screened party risk objects, one entry per search party
 
 ```json
+#### Moody's GRID Matches
+- `{moodysHitEvents}` — Array of screened party risk objects, one entry per search party. Populated in Step 6, classified and scored in Steps 7 and 7a.
+
+```json
 [
   {
-    "partyId":    string,
-    "partyName":  string,
+    "partyId":      string,
+    "partyName":    string,
     "relationship": string,
-    "riskScore":  integer,
-    "riskLevel":  "High" | "Medium" | "Low",
+    "riskScore":    integer | null,
+    "riskLevel":    "High" | "Medium" | "Low" | null,
     "summary": {
       "fullWeightEvents":    string[],
       "partialWeightEvents": string[]
@@ -83,9 +87,10 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
     "hits": [
       {
         "gridId":     string,
-        "weight":     "fullWeight" | "partialWeight" | "noWeight",
-        "auto":       boolean,
-        "confirmed":  boolean,
+        "resolution": string | null,
+        "weight":     "unknownWeight" | "fullWeight" | "partialWeight" | "noWeight",
+        "auto":       boolean | null,
+        "confirmed":  boolean | null,
         "eventCodes": string[]
       }
     ]
@@ -96,12 +101,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **Rules:**
 - One entry in `{moodysHitEvents}` per `searchParty`
 - One entry in `hits[]` per Moody's GRID hit
-- `auto` and `confirmed` are mutually exclusive — only one is ever `true` per hit
+- All hits initialised as `unknownWeight` in Step 6; reclassified in Step 7
+- `auto` and `confirmed` are `null` until Step 7; thereafter mutually exclusive — only one is ever `true` per hit
 - `noWeight` hits are always `confirmed: true` (require `MOODYGRID-NOMATCH` resolution)
-- `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits
-- `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits
+- `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits; populated in Step 7
+- `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits; populated in Step 7
 - `noWeight` events are excluded from `summary`
-- `riskScore` and `riskLevel` derived per Appendix B party-level scoring rules
+- `riskScore` and `riskLevel` are `null` until Step 7a
 
 #### Runtime Flags
 - `{useChromeMCP}` — `TRUE` if Chrome MCP is available; `FALSE` if unavailable or call fails. Evaluated again at each step when required. 
@@ -323,11 +329,35 @@ WAIT for user input:
 - Run conflicts search with `intapp:run_conflicts_search` using `{conID}`
 
 ---
-#### ▶️ **Step 6: Analyze Moody's GRID Hits**
+#### ▶️ **Step 6: Fetch Moody's GRID Hits**
+
+| Field | Value |
+|---|---|
+| **Type** | Processing |
+| **Status Message** | 🛡️ Running Moody's GRID screen... |
+| **Notification Rule** | Zero output permitted during this step except the status message above. |
+
+- Get conflicts results with `intapp:get_conflict_search_results` for `{conID}`
+- Extract all hits where `type` = `"Moody's GRID"` — capture `resultId` and `resolution` for each
+- Run `intapp:get_moodys_entity` for each `resultId` (parallel/batches permitted)
+- For each search party, initialise one entry in `{moodysHitEvents}[]` with:
+  - `partyId`, `partyName`, `relationship` from `{relatedParties}`
+  - `hits[]` — one object per Moody's GRID hit containing:
+    - `gridId` — the `resultId`
+    - `resolution` — raw resolution string from conflicts results
+    - `eventCodes[]` — all unique category codes from the `get_moodys_entity` response events
+    - `weight` = `"unknownWeight"` — placeholder; recategorized in Step 7
+    - `auto` = `null` — set in Step 7
+    - `confirmed` = `null` — set in Step 7
+  - `riskScore`, `riskLevel`, `summary` — left empty; populated in Steps 7a and 7b
 
 ---
 
-#### ▶️ **Step 6a: Categorize Weight**
+#### ▶️ **Step 7: Analyze Moody's GRID Hits**
+
+---
+
+#### ▶️ **Step 7a: Categorize Weight**
 
 | Field | Value |
 |---|---|
@@ -359,7 +389,7 @@ Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(aut
 
 ---
 
-#### ▶️ **Step 6b: Party Risk Score**
+#### ▶️ **Step 7b: Party Risk Score**
 
 | Field | Value |
 |---|---|
@@ -372,7 +402,7 @@ Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(aut
 
 ---
 
-#### ▶️ **Step 6c: Overall Risk Score**
+#### ▶️ **Step 7c: Overall Risk Score**
 
 | Field | Value |
 |---|---|
@@ -390,7 +420,7 @@ Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(aut
 
 ---
 
-#### ▶️ **Step 7: Display Moody's GRID Screen Results and Risk**
+#### ▶️ **Step 8: Display Moody's GRID Screen Results and Risk**
 
 | Field | Value |
 |---|---|
@@ -401,13 +431,14 @@ Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(aut
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
 
-| Name (ID) | Risk Score | Relationship | Full Weight Events | Partial Weight Events |
-|---|---|---|---|---|
-| 🔷 `{partyName}` (`{partyId}`) | 🔴/🟠/🔘 | Client | `summary.fullWeightEvents` (auto #, confirmed #) | `summary.partialWeightEvents` (auto #) |
-| 🔹 `{partyName}` (`{partyId}`) | 🔴/🟠/🔘 | e.g. corpStructure | `summary.fullWeightEvents` (auto #, confirmed #) | `summary.partialWeightEvents` (auto #) |
+| Name (ID) | Risk Score | Relationship | Full Weight Events | Partial Weight Events | No Weight Events |
+|---|---|---|---|---|---|
+| 🔷 `{partyName}` (`{partyId}`) | 🔴/🟠/🔘 | Client | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (confirmed no match: #) |
+| 🔹 `{partyName}` (`{partyId}`) | 🔴/🟠/🔘 | corpStructure | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (confirmed no match: #) |
+
+Use `—` for any column where there are no events of that type.
 
 **GO TO** Step COMPLETE
-
 ---
 
 #### ▶️ **Step COMPLETE**
