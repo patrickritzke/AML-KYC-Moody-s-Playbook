@@ -444,11 +444,13 @@ Playbook ended but not completed.
 
 #### B. Party-Level Risk Score Calculation
 
+#### B. Party-Level Risk Score Calculation
+
 Evaluate in order, stop at first match:
 
-1. If any Critical code appears in `fullWeight.riskEvents` → score = 100, 🔴 High
-2. If any Critical code appears in `partialWeight.riskEvents` → score = 10, 🔴 High
-3. Otherwise, sum all unique event code values across `fullWeight.riskEvents` (100%) and `partialWeight.riskEvents` (50%, rounded down)
+1. If any Critical code appears in `summary.fullWeightEvents` → score = 100, 🔴 High
+2. If any Critical code appears in `summary.partialWeightEvents` → score = 10, 🔴 High
+3. Otherwise, sum all unique event code values across `summary.fullWeightEvents` (100%) and `summary.partialWeightEvents` (50%, rounded down)
 
 | Tier | Codes | Full Weight | Partial Weight |
 |---|---|---|---|
@@ -512,7 +514,7 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 ```
 
 ##### Grid Question XML
-*(one `<GridRow>` per entry in `{relatedPartiesTable[]}`, with `<RowId>` incrementing from 0)*
+*(one `<GridRow>` per entry across all `partiesList[]` buckets in `{relatedParties}`, deduplicated by `partyId`, with `<RowId>` incrementing from 0)*
 ```xml
 <Grid>
   <GridRow>
@@ -549,7 +551,10 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 #### E. `intapp:create_conflicts_search` API Details
 
 ##### API Body
-*(one entry per `{relatedPartiesTable[]}` entry, plus the client)*
+*(one entry per unique party across all `partiesList[]` buckets in `{relatedParties}`, plus the client as first entry)*
+- Client entry: `{ "affiliationType": "{clientPartyConAff}", "name": "{clientPartyName}", "partyId": "{clientPartyId}" }`
+- Related party entries: `{ "affiliationType": "{relPartyConAff}", "name": "{partyName}", "partyId": "{partyId}" }` — deduplicated by `partyId`
+
 ```json
 {
   "name": "AML KYC - Moody's GRID Screen for {clientPartyName} for Request {reqId}",
