@@ -386,7 +386,7 @@ Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(aut
   - 🟠 Medium → +5
   - 🔘 Low → +1
 - Sum baseline + all contributions, cap at 100
-- Set `{overallRiskScore}` and `{overallRiskLevel}` per thresholds in Appendix B
+- Set `{overallRiskScore}` and `{overallRiskLevel}` per thresholds in Appendix C
 
 ---
 
