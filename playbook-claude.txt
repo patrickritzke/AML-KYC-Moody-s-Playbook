@@ -66,23 +66,42 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `{conID}` — ID of the created conflicts search
 
 ### Moody's GRID Matches
-- `{moodysHitEvents}`
-\`\`\`json
+- `{moodysHitEvents}` — Array of screened party risk objects, one entry per search party
 
-"fullWeight": {
-  "riskEvents": string[],
-  "auto":       integer,
-  "confirmed":  integer
-},
-"partialWeight": {
-  "riskEvents": string[],
-  "auto":       integer
-},
-"noWeight": {
-  "riskEvents": string[],
-  "confirmed":  integer
-}
+```json
+[
+  {
+    "partyId":    string,
+    "partyName":  string,
+    "relationship": string,
+    "riskScore":  integer,
+    "riskLevel":  "High" | "Medium" | "Low",
+    "summary": {
+      "fullWeightEvents":    string[],
+      "partialWeightEvents": string[]
+    },
+    "hits": [
+      {
+        "gridId":     string,
+        "weight":     "fullWeight" | "partialWeight" | "noWeight",
+        "auto":       boolean,
+        "confirmed":  boolean,
+        "eventCodes": string[]
+      }
+    ]
+  }
+]
 ```
+
+**Rules:**
+- One entry in `{moodysHitEvents}` per `searchParty`
+- One entry in `hits[]` per Moody's GRID hit
+- `auto` and `confirmed` are mutually exclusive — only one is ever `true` per hit
+- `noWeight` hits are always `confirmed: true` (require `MOODYGRID-NOMATCH` resolution)
+- `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits
+- `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits
+- `noWeight` events are excluded from `summary`
+- `riskScore` and `riskLevel` derived per Appendix B party-level scoring rules
 
 #### Runtime Flags
 - `{useChromeMCP}` — `TRUE` if Chrome MCP is available; `FALSE` if unavailable or call fails. Evaluated again at each step when required. 
@@ -304,55 +323,88 @@ WAIT for user input:
 - Run conflicts search with `intapp:run_conflicts_search` using `{conID}`
 
 ---
-
-#### ▶️ **Step 6: Run Moody's Screen**
-
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing |
-> | **Status Message** | 🛡️ Running Moody's GRID screen... |
-> | **Notification Rule** | Show status message only — suppress all tool output and commentary |
-
-- Get conflicts results with `intapp:run_conflicts_results` for `{conID}`
-- Extract IDs for all Moody's GRID hit results
-- Run `intapp:get_moodys_entity` for each ID (can be run in parallel/batches)
-- For each hit, capture all unique event categories
-- Consolidate unique event categories per party across all hits
-- For each searched party:
-  - If < 3 Moody's GRID hits → mark all as likely matches
-  - If ≥ 3 Moody's GRID hits → apply name matching logic to determine likely matches
+#### ▶️ **Step 6: Analyze Moody's GRID Hits**
 
 ---
 
-#### ▶️ **Step 7: Risk Scoring**
+#### ▶️ **Step 6a: Categorize Weight**
 
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing |
-> | **Status Message** | 📊 Calculating risk scores... |
-> | **Notification Rule** | Show status message only — suppress all tool output and commentary |
+| Field | Value |
+|---|---|
+| **Type** | Processing |
+| **Status Message** | 🛡️ Running Moody's GRID screen... |
+| **Notification Rule** | Zero output permitted during this step except the status message above. |
 
-- Run client and all screened parties through risk scoring calculator for Likely Matches only
-- Calculate the overall group risk score
-- See Appendix B for scoring details
+- Get conflicts results with `intapp:get_conflict_search_results` for `{conID}`
+- Extract all hits where `type` = `"Moody's GRID"` — capture `resultId` and `resolution` for each
+- Run `intapp:get_moodys_entity` for each `resultId` (parallel/batches permitted) — capture all event codes per hit
+- For each screened party, group its Moody's GRID hits and determine `isLikely`:
+  - If total hits < 3 → `isLikely = true` for all hits
+  - If total hits ≥ 3 → apply name matching logic to determine `isLikely` per hit
+- Classify each hit and set `weight`, `auto`, `confirmed` fields:
+
+| Resolution | isLikely | weight | auto | confirmed |
+|---|---|---|---|---|
+| `{conResMatch}` | Any | `fullWeight` | false | true |
+| `{conResNoMatch}` | Any | `noWeight` | false | true |
+| null / other | true | `fullWeight` | true | false |
+| null / other | false | `partialWeight` | true | false |
+
+- For each party, build one entry in `{moodysHitEvents}[]`:
+  - One object in `hits[]` per Moody's GRID hit with `gridId`, `weight`, `auto`, `confirmed`, `eventCodes`
+  - Derive `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits
+  - Derive `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits
+
+Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(auto) + noWeight(confirmed)`
 
 ---
 
-#### ▶️ **Step 8: Display Moody's GRID Screen Results and Risk**
+#### ▶️ **Step 6b: Party Risk Score**
 
-> | Field | Value |
-> |---|---|
-> | **Type** | Display |
-> | **Status Message** | *(none — display output is the communication)* |
-> | **Notification Rule** | Return results only — no preamble, commentary, or confirmation |
+| Field | Value |
+|---|---|
+| **Type** | Processing |
+| **Status Message** | 📊 Calculating risk scores... |
+| **Notification Rule** | Zero output permitted during this step except the status message above. |
+
+- For each entry in `{moodysHitEvents}[]`, apply party-level risk scoring rules from Appendix B
+- Set `riskScore` and `riskLevel` on each entry
+
+---
+
+#### ▶️ **Step 6c: Overall Risk Score**
+
+| Field | Value |
+|---|---|
+| **Type** | Processing |
+| **Status Message** | 📊 Calculating overall risk score... |
+| **Notification Rule** | Zero output permitted during this step except the status message above. |
+
+- Use the client party's `riskScore` as the baseline
+- For each related party in `{moodysHitEvents}[]`, add contribution based on `riskLevel`:
+  - 🔴 High → +10
+  - 🟠 Medium → +5
+  - 🔘 Low → +1
+- Sum baseline + all contributions, cap at 100
+- Set `{overallRiskScore}` and `{overallRiskLevel}` per thresholds in Appendix B
+
+---
+
+#### ▶️ **Step 7: Display Moody's GRID Screen Results and Risk**
+
+| Field | Value |
+|---|---|
+| **Type** | Display |
+| **Status Message** | *(none — display output is the communication)* |
+| **Notification Rule** | Return results only — no preamble, commentary, or confirmation |
 
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
-> ## Overall Risk Score: 🔴 High / 🟠 Medium / 🔘 Low
+> ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
 
-| Name (ID) | Risk Score | Relationship | Possible Matches | Likely Matches | Likely Match Risk Events |
-|---|---|---|---|---|---|
-| 🔷 Client Name (ID) | 🔴/🟠/🔘 | Client | # | # | e.g. MLA, PEP, TER |
-| 🔹 Party Name (ID) | 🔴/🟠/🔘 | e.g. Ultimate Parent | # | # | e.g. FRD, BRB |
+| Name (ID) | Risk Score | Relationship | Full Weight Events | Partial Weight Events |
+|---|---|---|---|---|
+| 🔷 `{partyName}` (`{partyId}`) | 🔴/🟠/🔘 | Client | `summary.fullWeightEvents` (auto #, confirmed #) | `summary.partialWeightEvents` (auto #) |
+| 🔹 `{partyName}` (`{partyId}`) | 🔴/🟠/🔘 | e.g. corpStructure | `summary.fullWeightEvents` (auto #, confirmed #) | `summary.partialWeightEvents` (auto #) |
 
 **GO TO** Step COMPLETE
 
@@ -390,21 +442,48 @@ Playbook ended but not completed.
 - **Related Party Indicator:** 🔹 next to party name
 - **New Party Indicator:** 🆕 before 🔹 when `isNew` = `true`
 
-#### B. Risk Score Calculation
+#### B. Party-Level Risk Score Calculation
 
-| Tier | Points Each | Codes |
-|---|---|---|
-| Critical | 10 | BLK, BRB, BUS, DEN, FOF, FOS, FRD, IRC, MLA, ORG, PEP, REG, SEC, SEX, SNX, TER, WLT |
-| Valuable | 5 | CFT, CYB, DTF, ENV, FUG, GAM, HUM, IMP, KID, LMD, LNS, MOR, MSB, MUR, OBS, PRJ, RES, SMG, SPY, TAX, TFT, TRF, VCY |
-| Investigative | 3 | ARS, AST, BUR, CON, DPS, FOR, IGN, PSP, ROB |
-| Probative | 1 | ABU, CPR, IPR, MIS, NSC |
-| Theoretical Maximum | | 317 |
+Evaluate in order, stop at first match:
 
-- **Related party score:** (raw ÷ 317) × 100
-- **Group score:** max(client score, highest related party score) + log(n) × modifier (5–10), capped at 100
-- **Risk Levels:** 🔴 High = 67–100, 🟠 Medium = 34–66, 🔘 Low = 0–33
+1. If any Critical code appears in `fullWeight.riskEvents` → score = 100, 🔴 High
+2. If any Critical code appears in `partialWeight.riskEvents` → score = 10, 🔴 High
+3. Otherwise, sum all unique event code values across `fullWeight.riskEvents` (100%) and `partialWeight.riskEvents` (50%, rounded down)
 
-#### C. `intapp:create_request` API Details
+| Tier | Codes | Full Weight | Partial Weight |
+|---|---|---|---|
+| Critical | BLK, BRB, BUS, DEN, FOF, FOS, FRD, IRC, MLA, ORG, PEP, REG, SEC, SEX, SNX, TER, WLT | 100 → instant 🔴 High | 10 → instant 🔴 High |
+| Valuable | CFT, CYB, DTF, ENV, FUG, GAM, HUM, IMP, KID, LMD, LNS, MOR, MSB, MUR, OBS, PRJ, RES, SMG, SPY, TAX, TFT, TRF, VCY | 5 | 2 |
+| Investigative | ARS, AST, BUR, CON, DPS, FOR, IGN, PSP, ROB | 3 | 1 |
+| Probative | ABU, CPR, IPR, MIS, NSC | 1 | 0 |
+
+| Risk Level | Score |
+|---|---|
+| 🔴 High | ≥ 10 |
+| 🟠 Medium | 4 – 9 |
+| 🔘 Low | 0 – 3 |
+
+`noWeight.riskEvents` do not contribute to score.
+
+#### C. Overall Risk Score Calculation
+
+Start with the client party's `riskScore` as the baseline. Then for each related party, add a contribution based on their `riskLevel`:
+
+| Related Party Risk Level | Points Added |
+|---|---|
+| 🔴 High | 10 |
+| 🟠 Medium | 5 |
+| 🔘 Low | 1 |
+
+Overall score = `client riskScore` + sum of all related party contributions, capped at 100.
+
+| Overall Risk | Score |
+|---|---|
+| 🔴 High | ≥ 67 |
+| 🟠 Medium | 34 – 66 |
+| 🔘 Low | 0 – 33 |
+
+#### D. `intapp:create_request` API Details
 
 ##### API Body
 ```json
@@ -467,7 +546,7 @@ Playbook ended but not completed.
 </Grid>
 ```
 
-#### D. `intapp:create_conflicts_search` API Details
+#### E. `intapp:create_conflicts_search` API Details
 
 ##### API Body
 *(one entry per `{relatedPartiesTable[]}` entry, plus the client)*
@@ -482,7 +561,7 @@ Playbook ended but not completed.
   ]
 }
 ```
-### Appendix E. Multi-Source Relationship Rule
+### Appendix F. Multi-Source Relationship Rule
 
 Relationship buckets are **non-exclusive** — a single entity can and should be recorded
 in multiple buckets simultaneously. Evaluate all bucket conditions for every entity
@@ -493,7 +572,7 @@ shareholders list, it holds three relationships at once: `["GUO", "Parent", "Sha
 It appears as a single row in `{relatedPartiesTable[]}` with all three labels — never
 as duplicate rows, and never counted more than once toward any bucket's `total`.
 
-### Appendix F. intapp:get_corp_structure_party_relationships tool relatedParties Schema
+### Appendix G. intapp:get_corp_structure_party_relationships tool relatedParties Schema
 
 \`\`\`json
 {
