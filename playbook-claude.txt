@@ -65,6 +65,25 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `{reqID}` — ID of the created request
 - `{conID}` — ID of the created conflicts search
 
+### Moody's GRID Matches
+- `{moodysHitEvents}`
+\`\`\`json
+
+"fullWeight": {
+  "riskEvents": string[],
+  "auto":       integer,
+  "confirmed":  integer
+},
+"partialWeight": {
+  "riskEvents": string[],
+  "auto":       integer
+},
+"noWeight": {
+  "riskEvents": string[],
+  "confirmed":  integer
+}
+```
+
 #### Runtime Flags
 - `{useChromeMCP}` — `TRUE` if Chrome MCP is available; `FALSE` if unavailable or call fails. Evaluated again at each step when required. 
 
