@@ -27,6 +27,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - `{reqRefGridPossibleMatch}` = `"Possible Matches"`
   - `{reqRefGridLikelyMatch}` = `"Likely Matches"`
   - `{reqRefGridLikelyMatchRiskEvent}` = `"Likely Matches Risk Events"`
+- '{conResMatch}' = "Moody's GRID - Is Not a Match"
+- '{conResNoMatch}' = "Moody's GRID - Is a Match"
 
 #### Client Party
 - `{clientPartyId}` — Intapp party ID of the client
