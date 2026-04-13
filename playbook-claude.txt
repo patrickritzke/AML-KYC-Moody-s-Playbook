@@ -438,8 +438,33 @@ Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(aut
 
 Use `—` for any column where there are no events of that type.
 
-**GO TO** Step COMPLETE
+**GO TO** Step 9
+
 ---
+
+#### ▶️ **Step 9: Complete or Rerun**
+
+| Field | Value |
+|---|---|
+| **Type** | User Prompt |
+| **Status Message** | *(none — display output is the communication)* |
+| **Notification Rule** | Only show prompt and options. Do not show commentary or narration |
+
+---
+
+*What would you like to do next?*
+
+| | Option | Description |
+|---|---|---|
+| **A** | **Complete AML/KYC for `{clientPartyName}` (`{clientPartyId}`)** | Updates parties with auto and confirmed matches |
+| **B** | **Rerun Risk Scoring** | Open [conflicts search](https://{yourhost}/conflicts/search/{conID}) to resolve hits first |
+
+---
+
+WAIT for user input:
+
+- If user selects **A** → **GO TO** Step COMPLETE
+- If user selects **B** → **GO TO** Step 6
 
 #### ▶️ **Step COMPLETE**
 
