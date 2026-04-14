@@ -9,6 +9,9 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 ---
 
+### Test Companies
+- When I say run Test, use party ID 522426593 - I just want to quickly get it going
+
 ### Playbook Variables
 
 #### Debug Mode
@@ -410,7 +413,6 @@ WAIT for user input:
 Total hits per party must equal: `{hitWeightFull}(auto+confirmed)` + `{hitWeightPartial}(auto)` + `{hitWeightNone}(auto+confirmed)`
 
 ---
-
 #### ▶️ **Step 7b: Party Risk Score**
 
 | Field | Value |
@@ -419,31 +421,7 @@ Total hits per party must equal: `{hitWeightFull}(auto+confirmed)` + `{hitWeight
 | **Status Message** | 📊 Calculating client and corporate structure relationship risk scores... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
-For each entry in `{moodysHitEvents}[]`, apply the following scoring rules in order, stopping at the first match. Evaluate `summary.fullWeightEvents` and `summary.partialWeightEvents` **independently and in sequence** — do not skip the partialWeight critical check if fullWeightEvents is empty or absent.
-
-1. If any Critical code appears in `summary.fullWeightEvents` → `riskScore` = 100, `riskLevel` = 🔴 High. Stop.
-2. If any Critical code appears in `summary.partialWeightEvents` → `riskScore` = 10, `riskLevel` = 🔴 High. Stop.
-3. Otherwise, compute point sum:
-   - For each unique code in `summary.fullWeightEvents`: add full weight value from tier table below
-   - For each unique code in `summary.partialWeightEvents`: add partial weight value from tier table below (round down per code)
-   - Sum all values → set `riskScore`, derive `riskLevel` from threshold table below
-
-| Tier | Codes | Full Weight | Partial Weight |
-|---|---|---|---|
-| Critical | BLK, BRB, BUS, DEN, FOF, FOS, FRD, IRC, MLA, ORG, PEP, REG, SEC, SEX, SNX, TER, WLT | 100 → instant 🔴 High | 10 → instant 🔴 High |
-| Valuable | CFT, CYB, DTF, ENV, FUG, GAM, HUM, IMP, KID, LMD, LNS, MOR, MSB, MUR, OBS, PRJ, RES, SMG, SPY, TAX, TFT, TRF, VCY | 5 | 2 |
-| Investigative | ARS, AST, BUR, CON, DPS, FOR, IGN, PSP, ROB | 3 | 1 |
-| Probative | ABU, CPR, IPR, MIS, NSC | 1 | 0 |
-
-| Risk Level | Score |
-|---|---|
-| 🔴 High | ≥ 10 |
-| 🟠 Medium | 4 – 9 |
-| 🔘 Low | 0 – 3 |
-
-`{hitWeightNone}` event codes never contribute to score and are excluded from all summary arrays.
-
-Set `riskScore` and `riskLevel` on each entry in `{moodysHitEvents}[]`.
+For each entry in `{moodysHitEvents}[]`, apply the scoring rules defined in **Appendix B** in full, in order. Set `riskScore` and `riskLevel` on each entry.
 
 ---
 
@@ -455,13 +433,7 @@ Set `riskScore` and `riskLevel` on each entry in `{moodysHitEvents}[]`.
 | **Status Message** | 📊 Calculating overall risk score... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
-- Use the client party's `riskScore` as the baseline
-- For each related party in `{moodysHitEvents}[]`, add contribution based on `riskLevel`:
-  - 🔴 High → +10
-  - 🟠 Medium → +5
-  - 🔘 Low → +1
-- Sum baseline + all contributions, cap at 100
-- Set `{overallRiskScore}` and `{overallRiskLevel}` per thresholds in Appendix C
+Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvents}[]`. Set `{overallRiskScore}` and `{overallRiskLevel}`.
 
 ---
 
@@ -473,7 +445,7 @@ Set `riskScore` and `riskLevel` on each entry in `{moodysHitEvents}[]`.
 | **Status Message** | *(none — display output is the communication)* |
 | **Notification Rule** | Output the column assignment block first, then the table. No other commentary. |
 
-##### Pre-Render Column Assignment (required output — print this before the table)
+##### Pre-Render Column Assignment
 
 For every party in `{moodysHitEvents}[]` that has at least one hit, output this block:
 
@@ -591,7 +563,7 @@ Evaluate in order, stop at first match:
 
 | Tier | Codes | Full Weight | Partial Weight |
 |---|---|---|---|
-| Critical | BLK, DEN, FOF, FOS, IRC, MLA, ORG, PEP, SNX, TER, WLT | 100 → instant 🔴 High | +1- |
+| Critical | BLK, DEN, FOF, FOS, IRC, MLA, ORG, PEP, SNX, TER, WLT | 100 → instant 🔴 High | +10 |
 | Valuable | BRB, BUS, CFT, CYB, DTF, ENV, FRD, FUG, GAM, HUM, IMP, KID, LMD, LNS, MOR, MSB, MUR, OBS, PRJ, REG, RES, SEC, SEX, SMG, SPY, TAX, TFT, TRF, VCY | +5 | +2 |
 | Investigative | ARS, AST, BUR, CON, DPS, FOR, IGN, PSP, ROB | +3 | +1 |
 | Probative | ABU, CPR, IPR, MIS, NSC | +1 | +0 |
