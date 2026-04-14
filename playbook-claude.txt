@@ -541,8 +541,6 @@ Playbook ended but not completed.
 
 #### B. Party-Level Risk Score Calculation
 
-#### B. Party-Level Risk Score Calculation
-
 Evaluate in order, stop at first match:
 
 1. If any Critical code appears in `summary.fullWeightEvents` → score = 100, 🔴 High
@@ -699,7 +697,7 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 
 ### Appendix G. `get_conflicts_search` Response Guide (`properties=resultsPlusMoodysGRID`)
 
-### Key Fields
+#### Key Fields
 
 | Field | Description |
 |---|---|
@@ -713,7 +711,7 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 | `results[].moodysError` | Present if enrichment failed for that hit |
 | `results[].resolution` | Conflict resolution status |
 
-### Sample Response
+#### Sample Response
 
 ```json
 {
@@ -746,3 +744,43 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 - Non-Moody's hits are returned as-is with no `moodysGRID` field
 - If enrichment fails for a hit, `moodysGRID` will be `null` and `moodysError` will describe the failure
 - Enrichment is capped at **25 Moody's hits** per call, processed in batches of 5
+
+### Appendix H. Party Risk Score Reasoning
+
+*Displayed only when explicitly requested. Provides a per-hit breakdown of every event code contribution that produced a party's final score.*
+
+---
+
+**Format**
+{partyName} ({partyId}) — Score: {score} {riskLevel}
+Full Weight
+{Hit Name} ({resultId}) — Auto Match {matchScore}%
+• {CODE}   → 100  [Rule 1 — Critical, score ceiling reached]
+{Hit Name} ({resultId}) — Auto Match {matchScore}%
+• {CODE}   +{value}
+• {CODE}   +{value}
+{Hit Name} ({resultId}) — Confirmed Match
+• {CODE}   +{value}
+• {CODE}   +{value}
+Partial Weight
+{Hit Name} ({resultId}) — Auto Match {matchScore}%
+• {CODE}   +{value}
+• {CODE}   +{value}
+No Weight
+{Hit Name} ({resultId}) — Confirmed No Match
+• {CODE}   (not scored)
+• {CODE}   (not scored)
+Total: {score}  {riskLevel}
+
+---
+
+**Rules:**
+- Auto Match hits show the computed token overlap percentage, e.g. `67%`
+- Confirmed Match and Confirmed No Match hits were manually resolved — no percentage is shown
+- If Rule 1 fired, the Critical fullWeight code that triggered it is marked `→ 100`
+  and no further contributions are listed — the score is 100 regardless of remaining hits
+- Every event code in every hit is listed individually — the same code appearing
+  across multiple hits contributes each time
+- Partial weight values are 50% of the full value, rounded down per code (e.g. `+2.5` is valid)
+- noWeight hits are listed for transparency but marked `(not scored)`
+- The Total line reflects the final score, capped at 100
