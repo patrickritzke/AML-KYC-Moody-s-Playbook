@@ -316,7 +316,7 @@ WAIT for user input:
 > | Field | Value |
 > |---|---|
 > | **Type** | Processing |
-> | **Status Message** | 🛡️ Creating request and conflicts search... |
+> | **Status Message** | 🛡️ Creating request and Moody's GRID screen... |
 > | **Notification Rule** | Status message only. Do not show commentary or narration. |
 
 - Create a request with `intapp:create_request`
@@ -334,7 +334,7 @@ WAIT for user input:
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 🛡️ Running Moody's GRID screen... |
+| **Status Message** | 🛡️ Screening parties on Moody's GRID... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
 - Call `intapp:get_conflict_search_results` with `{conID}` and `properties=resultsPlusMoodysGRID`
@@ -363,7 +363,7 @@ WAIT for user input:
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 🛡️ Running Moody's GRID screen... |
+| **Status Message** | 🛡️ Analyzing Moody's GRID screening results for matches... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
 - Use the already-fetched `{moodysHitEvents}[]` data from Step 6 — no additional API calls required
@@ -393,7 +393,7 @@ Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(aut
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 📊 Calculating risk scores... |
+| **Status Message** | 📊 Calculating client and corporate structure relationshiop risk scores... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
 - For each entry in `{moodysHitEvents}[]`, apply party-level risk scoring rules from Appendix B
