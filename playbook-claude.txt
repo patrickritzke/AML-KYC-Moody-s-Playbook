@@ -445,9 +445,9 @@ Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvent
 | **Status Message** | *(none — display output is the communication)* |
 | **Notification Rule** | Output the column assignment block first, then the table. No other commentary. |
 
-##### Pre-Render Column Assignment (required output — print this before the table)
+##### Pre-Render Column Assignment
 
-For every party in `{moodysHitEvents}[]` that has at least one hit, output this block:
+For every party in `{moodysHitEvents}[]` that has at least one hit:
 
 ```
 ⚙️ Column Assignment — {partyName}
