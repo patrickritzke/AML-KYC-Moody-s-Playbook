@@ -471,28 +471,30 @@ Set `riskScore` and `riskLevel` on each entry in `{moodysHitEvents}[]`.
 |---|---|
 | **Type** | Display |
 | **Status Message** | *(none — display output is the communication)* |
-| **Notification Rule** | Return results only — no preamble, commentary, or confirmation |
+| **Notification Rule** | Output the column assignment block first, then the table. No other commentary. |
 
-##### Pre-Render Verification (silent — zero output)
+##### Pre-Render Column Assignment (required output — print this before the table)
 
-Verify column assignments before rendering. If any assertion fails, correct before rendering.
+For every party in `{moodysHitEvents}[]` that has at least one hit, output this block:
 
-**Column assignment is determined solely by `weight` — never by `riskLevel`, `riskScore`, or match label:**
+```
+⚙️ Column Assignment — {partyName}
+{gridId} | GRID name: "{moodysGRID.name}" | searchTerm: "{searchTerm}" | matchScore: {matchScore} | weight: {weight} → {column}
+{gridId} | GRID name: "{moodysGRID.name}" | searchTerm: "{searchTerm}" | matchScore: {matchScore} | weight: {weight} → {column}
+...
+fullWeight: {n} hits | partialWeight: {n} hits | noWeight: {n} hits | total: {n} hits ✓
+```
 
-| `weight` | Column |
-|---|---|
-| `fullWeight` | Full Weight Hits |
-| `partialWeight` | Partial Weight Hits |
-| `noWeight` | No Weight Hits |
+Rules:
+- `{column}` is one of: `Full Weight Hits`, `Partial Weight Hits`, `No Weight Hits` — derived solely from `weight`
+- The total count must equal `hits[].length` for that party. If it does not, stop and correct before proceeding.
+- For errored hits (where `moodysGRID` is null due to `moodysError`): assign weight based on matchScore as normal, note `[enrichment error — event codes unavailable]`, and include in the count.
 
-> ⚠️ Likely/Unlikely describes match confidence only. An Unlikely hit has `weight = partialWeight` and belongs in Partial Weight Hits. A hit carrying Critical event codes is still `partialWeight` if that is its classified weight — Critical codes affect `riskScore`, not column placement.
-
-For each party in `{moodysHitEvents}[]`, assert before writing any row:
-1. Every hit is placed in the column matching its `weight` value only.
-2. Hit count across all three columns equals `hits[].length` for that party.
-3. The bold summary line in each column uses only event codes from hits assigned to that column.
+> ⚠️ Column placement is determined solely by `weight`. Event code severity (including Critical codes such as WLT, SNX, PEP) affects `riskScore` only — it never promotes a hit to a higher-weight column. A `partialWeight` hit with WLT goes in **Partial Weight Hits**, always.
 
 ##### Render
+
+After the column assignment block, render the results table.
 
 **Table columns:**
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
@@ -503,7 +505,7 @@ For each party in `{moodysHitEvents}[]`, assert before writing any row:
 - **No Weight Hits** — all hits where `weight = noWeight`
 
 **Cell format for each weight column:**
-1. **Bold summary line** — deduplicated event codes across all hits assigned to that column
+1. **Bold summary line** — deduplicated event codes across all hits assigned to that column only
 2. One entry per hit:
    - `• {gridId} (Likely)` — `auto = true` and `matchScore` ≥ `{fullWeightAutoMatchMin}`
    - `• {gridId} (Unlikely)` — `auto = true` and `matchScore` < `{fullWeightAutoMatchMin}`
@@ -513,7 +515,6 @@ For each party in `{moodysHitEvents}[]`, assert before writing any row:
 
 **Sort order:** Client row first, then related parties sorted by `riskScore` descending.
 
-```markdown
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
 
@@ -521,7 +522,6 @@ For each party in `{moodysHitEvents}[]`, assert before writing any row:
 |---|---|---|---|---|---|
 | 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{fullWeightSummary}**<br>• {gridId} (Likely)<br>&nbsp;&nbsp;{eventCodes}<br>• {gridId} (Resolved)<br>&nbsp;&nbsp;{eventCodes} | **{partialWeightSummary}**<br>• {gridId} (Unlikely)<br>&nbsp;&nbsp;{eventCodes} | **{noWeightSummary}**<br>• {gridId} (Resolved)<br>&nbsp;&nbsp;{eventCodes} |
 | 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | **{fullWeightSummary}**<br>• {gridId} (Likely)<br>&nbsp;&nbsp;{eventCodes} | **{partialWeightSummary}**<br>• {gridId} (Unlikely)<br>&nbsp;&nbsp;{eventCodes} | — |
-```
 
 **GO TO** Step 9
 ---
