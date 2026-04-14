@@ -544,21 +544,20 @@ Playbook ended but not completed.
 Evaluate in order, stop at first match:
 
 1. If any Critical code appears in `summary.fullWeightEvents` → score = 100, 🔴 High
-2. If any Critical code appears in `summary.partialWeightEvents` → score = 10, 🔴 High
-3. Otherwise, sum all unique event code values across `summary.fullWeightEvents` (100%) and `summary.partialWeightEvents` (50%, rounded down)
+2. Otherwise, sum all unique event code values across `summary.fullWeightEvents` (100%) and `summary.partialWeightEvents` (50%, rounded down)
 
 | Tier | Codes | Full Weight | Partial Weight |
 |---|---|---|---|
-| Critical | BLK, BRB, BUS, DEN, FOF, FOS, FRD, IRC, MLA, ORG, PEP, REG, SEC, SEX, SNX, TER, WLT | 100 → instant 🔴 High | 10 → instant 🔴 High |
-| Valuable | CFT, CYB, DTF, ENV, FUG, GAM, HUM, IMP, KID, LMD, LNS, MOR, MSB, MUR, OBS, PRJ, RES, SMG, SPY, TAX, TFT, TRF, VCY | 5 | 2 |
-| Investigative | ARS, AST, BUR, CON, DPS, FOR, IGN, PSP, ROB | 3 | 1 |
-| Probative | ABU, CPR, IPR, MIS, NSC | 1 | 0 |
+| Critical | BLK, DEN, FOF, FOS, IRC, MLA, ORG, PEP, SNX, TER, WLT | 100 → instant 🔴 High | +1- |
+| Valuable | BRB, BUS, CFT, CYB, DTF, ENV, FRD, FUG, GAM, HUM, IMP, KID, LMD, LNS, MOR, MSB, MUR, OBS, PRJ, REG, RES, SEC, SEX, SMG, SPY, TAX, TFT, TRF, VCY | +5 | +2 |
+| Investigative | ARS, AST, BUR, CON, DPS, FOR, IGN, PSP, ROB | +3 | +1 |
+| Probative | ABU, CPR, IPR, MIS, NSC | +1 | +0 |
 
 | Risk Level | Score |
 |---|---|
-| 🔴 High | ≥ 10 |
-| 🟠 Medium | 4 – 9 |
-| 🔘 Low | 0 – 3 |
+| 🔴 High | ≥ 67 |
+| 🟠 Medium | 40 – 67 |
+| 🔘 Low | 0 – 39 |
 
 `noWeight.riskEvents` do not contribute to score.
 
@@ -568,9 +567,9 @@ Start with the client party's `riskScore` as the baseline. Then for each related
 
 | Related Party Risk Level | Points Added |
 |---|---|
-| 🔴 High | 10 |
-| 🟠 Medium | 5 |
-| 🔘 Low | 1 |
+| 🔴 High | +10 |
+| 🟠 Medium | +5 |
+| 🔘 Low | +1 |
 
 Overall score = `client riskScore` + sum of all related party contributions, capped at 100.
 
