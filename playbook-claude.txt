@@ -29,8 +29,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - `{reqRefGridLikelyMatchRiskEvent}` = `"Likely Matches Risk Events"`
 - '{conResMatch}' = "Moody's GRID - Is Not a Match"
 - '{conResNoMatch}' = "Moody's GRID - Is a Match"
-- `{fullWeightAutoMatchMin}`    = `0.60`  — minimum matchScore for auto match to be classified fullWeight (Likely)
-- `{partialWeightAutoMatchMin}` = `0.30`  — minimum matchScore for auto match to be classified partialWeight (Unlikely)
+- `{fullWeightAutoMatchMin}`    = `0.70`  — minimum matchScore for auto match to be classified fullWeight (Likely)
+- `{partialWeightAutoMatchMin}` = `0.50`  — minimum matchScore for auto match to be classified partialWeight (Unlikely)
 
 #### Client Party
 - `{clientPartyId}` — Intapp party ID of the client
