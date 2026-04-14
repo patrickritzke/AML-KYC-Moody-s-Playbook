@@ -465,19 +465,36 @@ Set `riskScore` and `riskLevel` on each entry in `{moodysHitEvents}[]`.
 | **Status Message** | *(none — display output is the communication)* |
 | **Notification Rule** | Return results only — no preamble, commentary, or confirmation |
 
+Render the results table using all data from `{moodysHitEvents}[]`. Apply the following rules strictly:
+
+**Table columns:**
+- **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
+- **Risk Score** — `{riskLevel}` `{riskScore}` from Step 7b
+- **Relationship** — `Client` for the client row; relationship label for all others
+- **Full Weight Hits** — all hits where `weight` = `fullWeight`
+- **Partial Weight Hits** — all hits where `weight` = `partialWeight`
+- **No Weight Hits** — all hits where `weight` = `noWeight`
+
+**Cell format for each weight column:**
+1. **Bold summary line** — deduplicated event codes across all hits in that weight category
+2. One entry per hit, formatted as:
+   - `• {gridId} (Likely)` — when `auto = true` and `matchScore ≥ 0.60`
+   - `• {gridId} (Unlikely)` — when `auto = true` and `matchScore < 0.60`
+   - `• {gridId} (Resolved)` — when `confirmed = true`
+3. Indented event codes on the line below each hit: `&nbsp;&nbsp;{code1}, {code2}, ...`
+4. Render `—` in the cell when no hits of that weight type exist for that party
+
+**Sort order:** Client row first, then related parties sorted by risk score descending.
+
+```markdown
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
 
-| Name (ID) | Risk Score | Relationship | Full Weight Events | Partial Weight Events | No Weight Events |
+| Name (ID) | Risk Score | Relationship | Full Weight Hits | Partial Weight Hits | No Weight Hits |
 |---|---|---|---|---|---|
-| 🔷 `{partyName}` (`{partyId}`) | 🔴/🟠/🔘 | Client | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (confirmed no match: #) |
-| 🔹 `{partyName}` (`{partyId}`) | 🔴/🟠/🔘 | corpStructure | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (confirmed no match: #) |
-
-**Column population rules — apply strictly:**
-- Populate each column directly from `summary.fullWeightEvents`, `summary.partialWeightEvents`, and `noWeight` hit event codes respectively
-- **Never derive column content from `riskScore` or `riskLevel`** — a party with no fullWeight hits must still show its partialWeight events if they exist
-- Render `—` only when the corresponding summary array is genuinely empty after Step 7a processing
-- Hit counts in parentheses are always split by `auto` vs `confirmed` — show both even if one is zero (e.g. `auto: 3, confirmed: 0`)
+| 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{fullWeightSummary}**<br>• {gridId} (Likely)<br>&nbsp;&nbsp;{eventCodes}<br>• {gridId} (Unlikely)<br>&nbsp;&nbsp;{eventCodes}<br>• {gridId} (Resolved)<br>&nbsp;&nbsp;{eventCodes} | **{partialWeightSummary}**<br>• {gridId} (Likely)<br>&nbsp;&nbsp;{eventCodes}<br>• {gridId} (Unlikely)<br>&nbsp;&nbsp;{eventCodes}<br>• {gridId} (Resolved)<br>&nbsp;&nbsp;{eventCodes} | **{noWeightSummary}**<br>• {gridId} (Resolved)<br>&nbsp;&nbsp;{eventCodes} |
+| 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | **{fullWeightSummary}**<br>• {gridId} (Likely)<br>&nbsp;&nbsp;{eventCodes}<br>• {gridId} (Unlikely)<br>&nbsp;&nbsp;{eventCodes}<br>• {gridId} (Resolved)<br>&nbsp;&nbsp;{eventCodes} | **{partialWeightSummary}**<br>• {gridId} (Likely)<br>&nbsp;&nbsp;{eventCodes}<br>• {gridId} (Unlikely)<br>&nbsp;&nbsp;{eventCodes}<br>• {gridId} (Resolved)<br>&nbsp;&nbsp;{eventCodes} | **{noWeightSummary}**<br>• {gridId} (Resolved)<br>&nbsp;&nbsp;{eventCodes} |
+```
 
 **GO TO** Step 9
 
