@@ -106,7 +106,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - One entry in `hits[]` per Moody's GRID hit
 - All hits initialised as `unknownWeight` in Step 6; reclassified in Step 7
 - `auto` and `confirmed` are `null` until Step 7; thereafter mutually exclusive — only one is ever `true` per hit
-- `noWeight` hits are always `confirmed: true` (require `MOODYGRID-NOMATCH` resolution)
+- `noWeight` hits are either manually confirmed (`resolution` = `{conResNoMatch}`, `confirmed: true`) or auto-classified (matchScore < `{partialWeightAutoMatchMin}`, `auto: true`)
 - `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits; populated in Step 7
 - `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits; populated in Step 7
 - `noWeight` events are excluded from `summary`
@@ -389,21 +389,25 @@ WAIT for user input:
 
 - Classify each hit and set `weight`, `auto`, `confirmed`, and `matchScore` fields:
 
-| Resolution | isLikely | weight | auto | confirmed | matchScore |
-|---|---|---|---|---|---|
-| `{conResMatch}` | Any | `{hitWeightFull}` | false | true | null |
-| `{conResNoMatch}` | Any | `{hitWeightNone}` | false | true | null |
-| null / other | true | `{hitWeightFull}` | true | false | computed |
-| null / other | false | `{hitWeightPartial}` | true | false | computed |
+| Resolution | matchScore | weight | auto | confirmed |
+|---|---|---|---|---|
+| `{conResMatch}` | null | `fullWeight` | false | true |
+| `{conResNoMatch}` | null | `noWeight` | false | true |
+| null / other | ≥ `{fullWeightAutoMatchMin}` | `fullWeight` | true | false |
+| null / other | ≥ `{partialWeightAutoMatchMin}` and < `{fullWeightAutoMatchMin}` | `partialWeight` | true | false |
+| null / other | < `{partialWeightAutoMatchMin}` | `noWeight` | true | false |
 
-- **Auto-classification rule for `{hitWeightNone}`:** Any hit classified as `{hitWeightNone}` automatically has `confirmed` = `true` and `auto` = `false`. No manual resolution is required — `{conResNoMatch}` is the only resolution that produces this weight and is always treated as confirmed.
+- **Auto-classification rule for `{hitWeightNone}`:** Hits classified as `noWeight` fall into two subtypes:
+  - **Manually confirmed** (`resolution` = `{conResNoMatch}`): `confirmed` = `true`, `auto` = `false`
+  - **Auto-classified** (matchScore < `{partialWeightAutoMatchMin}`): `auto` = `true`, `confirmed` = `false`
+  In both cases, event codes are excluded from `summary` arrays and never contribute to risk score.
 
 - For each party, update its entry in `{moodysHitEvents}[]`:
   - Set `weight`, `auto`, `confirmed`, and `matchScore` on each hit object
   - Derive `summary.fullWeightEvents` — deduplicated event codes across all `{hitWeightFull}` hits
   - Derive `summary.partialWeightEvents` — deduplicated event codes across all `{hitWeightPartial}` hits
 
-Total hits per party must equal: `{hitWeightFull}(auto+confirmed)` + `{hitWeightPartial}(auto)` + `{hitWeightNone}(confirmed)`
+Total hits per party must equal: `{hitWeightFull}(auto+confirmed)` + `{hitWeightPartial}(auto)` + `{hitWeightNone}(auto+confirmed)`
 
 ---
 
