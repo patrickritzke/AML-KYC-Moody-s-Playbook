@@ -29,6 +29,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - `{reqRefGridLikelyMatchRiskEvent}` = `"Likely Matches Risk Events"`
 - '{conResMatch}' = "Moody's GRID - Is Not a Match"
 - '{conResNoMatch}' = "Moody's GRID - Is a Match"
+- `{fullWeightAutoMatchMin}`    = `0.60`  — minimum matchScore for auto match to be classified fullWeight (Likely)
+- `{partialWeightAutoMatchMin}` = `0.30`  — minimum matchScore for auto match to be classified partialWeight (Unlikely)
 
 #### Client Party
 - `{clientPartyId}` — Intapp party ID of the client
@@ -381,7 +383,7 @@ WAIT for user input:
     - Normalised GRID name exactly matches normalised search term
     - Normalised GRID name contains the full normalised search term as a substring
     - Normalised search term contains the full normalised GRID name as a substring
-    - `matchScore` ≥ 0.60
+    - `matchScore` ≥ `{fullWeightAutoMatchMin}`
 
     Otherwise `isLikely = false`. Evaluate every unresolved hit individually — do not use total hit count to bypass this logic.
 
@@ -389,17 +391,19 @@ WAIT for user input:
 
 | Resolution | isLikely | weight | auto | confirmed | matchScore |
 |---|---|---|---|---|---|
-| `{conResMatch}` | Any | `fullWeight` | false | true | null |
-| `{conResNoMatch}` | Any | `noWeight` | false | true | null |
-| null / other | true | `fullWeight` | true | false | computed |
-| null / other | false | `partialWeight` | true | false | computed |
+| `{conResMatch}` | Any | `{hitWeightFull}` | false | true | null |
+| `{conResNoMatch}` | Any | `{hitWeightNone}` | false | true | null |
+| null / other | true | `{hitWeightFull}` | true | false | computed |
+| null / other | false | `{hitWeightPartial}` | true | false | computed |
+
+- **Auto-classification rule for `{hitWeightNone}`:** Any hit classified as `{hitWeightNone}` automatically has `confirmed` = `true` and `auto` = `false`. No manual resolution is required — `{conResNoMatch}` is the only resolution that produces this weight and is always treated as confirmed.
 
 - For each party, update its entry in `{moodysHitEvents}[]`:
   - Set `weight`, `auto`, `confirmed`, and `matchScore` on each hit object
-  - Derive `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits
-  - Derive `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits
+  - Derive `summary.fullWeightEvents` — deduplicated event codes across all `{hitWeightFull}` hits
+  - Derive `summary.partialWeightEvents` — deduplicated event codes across all `{hitWeightPartial}` hits
 
-Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(auto) + noWeight(confirmed)`
+Total hits per party must equal: `{hitWeightFull}(auto+confirmed)` + `{hitWeightPartial}(auto)` + `{hitWeightNone}(confirmed)`
 
 ---
 
@@ -433,7 +437,7 @@ For each entry in `{moodysHitEvents}[]`, apply the following scoring rules in or
 | 🟠 Medium | 4 – 9 |
 | 🔘 Low | 0 – 3 |
 
-`noWeight` event codes never contribute to score and are excluded from all summary arrays.
+`{hitWeightNone}` event codes never contribute to score and are excluded from all summary arrays.
 
 Set `riskScore` and `riskLevel` on each entry in `{moodysHitEvents}[]`.
 
@@ -471,15 +475,15 @@ Render the results table using all data from `{moodysHitEvents}[]`. Apply the fo
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
 - **Risk Score** — `{riskLevel}` `{riskScore}` from Step 7b
 - **Relationship** — `Client` for the client row; relationship label for all others
-- **Full Weight Hits** — all hits where `weight` = `fullWeight`
-- **Partial Weight Hits** — all hits where `weight` = `partialWeight`
-- **No Weight Hits** — all hits where `weight` = `noWeight`
+- **Full Weight Hits** — all hits where `weight` = `{hitWeightFull}`
+- **Partial Weight Hits** — all hits where `weight` = `{hitWeightPartial}`
+- **No Weight Hits** — all hits where `weight` = `{hitWeightNone}`
 
 **Cell format for each weight column:**
 1. **Bold summary line** — deduplicated event codes across all hits in that weight category
 2. One entry per hit, formatted as:
-   - `• {gridId} (Likely)` — when `auto = true` and `matchScore ≥ 0.60`
-   - `• {gridId} (Unlikely)` — when `auto = true` and `matchScore < 0.60`
+   - `• {gridId} (Likely)` — when `auto = true` and `matchScore` ≥ `{fullWeightAutoMatchMin}`
+   - `• {gridId} (Unlikely)` — when `auto = true` and `matchScore` < `{fullWeightAutoMatchMin}`
    - `• {gridId} (Resolved)` — when `confirmed = true`
 3. Indented event codes on the line below each hit: `&nbsp;&nbsp;{code1}, {code2}, ...`
 4. Render `—` in the cell when no hits of that weight type exist for that party
@@ -497,7 +501,6 @@ Render the results table using all data from `{moodysHitEvents}[]`. Apply the fo
 ```
 
 **GO TO** Step 9
-
 ---
 
 #### ▶️ **Step 9: Complete or Rerun**
