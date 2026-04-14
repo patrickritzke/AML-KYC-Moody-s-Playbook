@@ -91,7 +91,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
         "weight":     "unknownWeight" | "fullWeight" | "partialWeight" | "noWeight",
         "auto":       boolean | null,
         "confirmed":  boolean | null,
-        "eventCodes": string[]
+        "eventCodes": string[],
+        "matchScore": number | null
       }
     ]
   }
@@ -367,20 +368,34 @@ WAIT for user input:
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
 - Use the already-fetched `{moodysHitEvents}[]` data from Step 6 — no additional API calls required
-- For each screened party, group its hits and determine `isLikely`:
-  - If total hits < 3 → `isLikely = true` for all hits
-  - If total hits ≥ 3 → apply name matching logic to determine `isLikely` per hit
-- Classify each hit and set `weight`, `auto`, `confirmed` fields:
+- For each screened party, classify each hit individually:
 
-| Resolution | isLikely | weight | auto | confirmed |
-|---|---|---|---|---|
-| `{conResMatch}` | Any | `fullWeight` | false | true |
-| `{conResNoMatch}` | Any | `noWeight` | false | true |
-| null / other | true | `fullWeight` | true | false |
-| null / other | false | `partialWeight` | true | false |
+  - If `resolution` = `{conResMatch}` or `{conResNoMatch}` → classify immediately per the table below
+  - If `resolution` is null / empty / any other value → determine `isLikely` and `matchScore` via name matching:
+
+    Normalise both the hit's `moodysGRID.name` and the hit's `searchTerm` before comparing: lowercase, strip punctuation, collapse whitespace, remove legal suffixes (LLC, OOO, AO, JSC, GmbH, Inc, Ltd, Corp, Co, and common equivalents).
+
+    Compute `matchScore` as the token overlap ratio: shared tokens ÷ total unique tokens across both normalised strings. Round to 2 decimal places. Store `matchScore` on the hit object.
+
+    Set `isLikely = true` if ANY condition is met:
+    - Normalised GRID name exactly matches normalised search term
+    - Normalised GRID name contains the full normalised search term as a substring
+    - Normalised search term contains the full normalised GRID name as a substring
+    - `matchScore` ≥ 0.60
+
+    Otherwise `isLikely = false`. Evaluate every unresolved hit individually — do not use total hit count to bypass this logic.
+
+- Classify each hit and set `weight`, `auto`, `confirmed`, and `matchScore` fields:
+
+| Resolution | isLikely | weight | auto | confirmed | matchScore |
+|---|---|---|---|---|---|
+| `{conResMatch}` | Any | `fullWeight` | false | true | null |
+| `{conResNoMatch}` | Any | `noWeight` | false | true | null |
+| null / other | true | `fullWeight` | true | false | computed |
+| null / other | false | `partialWeight` | true | false | computed |
 
 - For each party, update its entry in `{moodysHitEvents}[]`:
-  - Set `weight`, `auto`, `confirmed` on each hit object
+  - Set `weight`, `auto`, `confirmed`, and `matchScore` on each hit object
   - Derive `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits
   - Derive `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits
 
