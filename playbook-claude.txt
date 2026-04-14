@@ -445,7 +445,7 @@ Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvent
 | **Status Message** | *(none — display output is the communication)* |
 | **Notification Rule** | Output the column assignment block first, then the table. No other commentary. |
 
-##### Pre-Render Column Assignment
+##### Pre-Render Column Assignment (required output — print this before the table)
 
 For every party in `{moodysHitEvents}[]` that has at least one hit, output this block:
 
@@ -458,31 +458,34 @@ fullWeight: {n} hits | partialWeight: {n} hits | noWeight: {n} hits | total: {n}
 ```
 
 Rules:
-- `{column}` is one of: `Full Weight Hits`, `Partial Weight Hits`, `No Weight Hits` — derived solely from `weight`
+- `{column}` is one of: `Strong Match`, `Moderate Match`, `Weak Match` — derived solely from `weight`
 - The total count must equal `hits[].length` for that party. If it does not, stop and correct before proceeding.
 - For errored hits (where `moodysGRID` is null due to `moodysError`): assign weight based on matchScore as normal, note `[enrichment error — event codes unavailable]`, and include in the count.
 
-> ⚠️ Column placement is determined solely by `weight`. Event code severity (including Critical codes such as WLT, SNX, PEP) affects `riskScore` only — it never promotes a hit to a higher-weight column. A `partialWeight` hit with WLT goes in **Partial Weight Hits**, always.
+> ⚠️ Column placement is determined solely by `weight`. Event code severity (including Critical codes such as WLT, SNX, PEP) affects `riskScore` only — it never promotes a hit to a higher-weight column. A `partialWeight` hit with WLT goes in **Moderate Match**, always.
 
 ##### Render
 
 After the column assignment block, render the results table.
 
-**Table columns:**
+**Table structure:** Two header rows. The first row has empty cells under Name (ID), Risk Score, and Relationship, and a single spanning header **Risk Events** over the three match columns. The second row contains all six column labels.
+
+| | | | Risk Events | | |
+|---|---|---|---|---|---|
+| **Name (ID)** | **Risk Score** | **Relationship** | **Strong Match** | **Moderate Match** | **Weak Match** |
+
+**Column definitions:**
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
 - **Risk Score** — `{riskLevel}` `{riskScore}` from Step 7b
 - **Relationship** — `Client` for the client row; relationship label for all others
-- **Full Weight Hits** — all hits where `weight = fullWeight`
-- **Partial Weight Hits** — all hits where `weight = partialWeight`
-- **No Weight Hits** — all hits where `weight = noWeight`
+- **Strong Match** — all hits where `weight = fullWeight`
+- **Moderate Match** — all hits where `weight = partialWeight`
+- **Weak Match** — all hits where `weight = noWeight`
 
-**Cell format for each weight column:**
+**Cell format for each match column:**
 1. **Bold summary line** — deduplicated event codes across all hits assigned to that column only
-2. One entry per hit:
-   - `• {gridId} (Likely)` — `auto = true` and `matchScore` ≥ `{fullWeightAutoMatchMin}`
-   - `• {gridId} (Unlikely)` — `auto = true` and `matchScore` < `{fullWeightAutoMatchMin}`
-   - `• {gridId} (Resolved)` — `confirmed = true`
-3. Indented event codes below each hit: `&nbsp;&nbsp;{code1}, {code2}, ...`
+2. One blank line
+3. Indented italic hit count: `&nbsp;&nbsp;`*`{n} Moody's profile(s)`*
 4. Render `—` when no hits of that weight exist for that party
 
 **Sort order:** Client row first, then related parties sorted by `riskScore` descending.
@@ -490,12 +493,14 @@ After the column assignment block, render the results table.
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
 
-| Name (ID) | Risk Score | Relationship | Full Weight Hits | Partial Weight Hits | No Weight Hits |
+| | | | Risk Events | | |
 |---|---|---|---|---|---|
-| 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{fullWeightSummary}**<br>• {gridId} (Likely)<br>&nbsp;&nbsp;{eventCodes}<br>• {gridId} (Resolved)<br>&nbsp;&nbsp;{eventCodes} | **{partialWeightSummary}**<br>• {gridId} (Unlikely)<br>&nbsp;&nbsp;{eventCodes} | **{noWeightSummary}**<br>• {gridId} (Resolved)<br>&nbsp;&nbsp;{eventCodes} |
-| 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | **{fullWeightSummary}**<br>• {gridId} (Likely)<br>&nbsp;&nbsp;{eventCodes} | **{partialWeightSummary}**<br>• {gridId} (Unlikely)<br>&nbsp;&nbsp;{eventCodes} | — |
+| **Name (ID)** | **Risk Score** | **Relationship** | **Strong Match** | **Moderate Match** | **Weak Match** |
+| 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{fullWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{partialWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{noWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* |
+| 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | — | **{partialWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | — |
 
 **GO TO** Step 9
+
 ---
 
 #### ▶️ **Step 9: Complete or Rerun**
