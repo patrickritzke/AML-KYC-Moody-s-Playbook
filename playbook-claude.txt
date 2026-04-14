@@ -337,19 +337,20 @@ WAIT for user input:
 | **Status Message** | 🛡️ Running Moody's GRID screen... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
-- Get conflicts results with `intapp:get_conflict_search_results` for `{conID}`
-- Extract all hits where `type` = `"Moody's GRID"` — capture `resultId` and `resolution` for each
-- Run `intapp:get_moodys_entity` for each `resultId` (parallel/batches permitted)
+- Call `intapp:get_conflict_search_results` with `{conID}` and `properties=resultsPlusMoodysGRID`
+- From the response, extract all entries in `results[]` where `type` = `"Moody's GRID"`
+- For each hit, capture: `resultId`, `resolution`, `searchTerm`, and `moodysGRID.eventCategories[]`
+- If `moodysGRIDSkipped` is present and > 0, note that enrichment was capped at 25 hits
 - For each search party, initialise one entry in `{moodysHitEvents}[]` with:
   - `partyId`, `partyName`, `relationship` from `{relatedParties}`
   - `hits[]` — one object per Moody's GRID hit containing:
     - `gridId` — the `resultId`
-    - `resolution` — raw resolution string from conflicts results
-    - `eventCodes[]` — all unique category codes from the `get_moodys_entity` response events
-    - `weight` = `"unknownWeight"` — placeholder; recategorized in Step 7
-    - `auto` = `null` — set in Step 7
-    - `confirmed` = `null` — set in Step 7
-  - `riskScore`, `riskLevel`, `summary` — left empty; populated in Steps 7a and 7b
+    - `resolution` — raw resolution string from the result
+    - `eventCodes[]` — taken directly from `moodysGRID.eventCategories[]`
+    - `weight` = `"unknownWeight"` — placeholder; recategorized in Step 7a
+    - `auto` = `null` — set in Step 7a
+    - `confirmed` = `null` — set in Step 7a
+  - `riskScore`, `riskLevel`, `summary` — left empty; populated in Steps 7b and 7c
 
 ---
 
@@ -365,10 +366,8 @@ WAIT for user input:
 | **Status Message** | 🛡️ Running Moody's GRID screen... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
-- Get conflicts results with `intapp:get_conflict_search_results` for `{conID}`
-- Extract all hits where `type` = `"Moody's GRID"` — capture `resultId` and `resolution` for each
-- Run `intapp:get_moodys_entity` for each `resultId` (parallel/batches permitted) — capture all event codes per hit
-- For each screened party, group its Moody's GRID hits and determine `isLikely`:
+- Use the already-fetched `{moodysHitEvents}[]` data from Step 6 — no additional API calls required
+- For each screened party, group its hits and determine `isLikely`:
   - If total hits < 3 → `isLikely = true` for all hits
   - If total hits ≥ 3 → apply name matching logic to determine `isLikely` per hit
 - Classify each hit and set `weight`, `auto`, `confirmed` fields:
@@ -380,8 +379,8 @@ WAIT for user input:
 | null / other | true | `fullWeight` | true | false |
 | null / other | false | `partialWeight` | true | false |
 
-- For each party, build one entry in `{moodysHitEvents}[]`:
-  - One object in `hits[]` per Moody's GRID hit with `gridId`, `weight`, `auto`, `confirmed`, `eventCodes`
+- For each party, update its entry in `{moodysHitEvents}[]`:
+  - Set `weight`, `auto`, `confirmed` on each hit object
   - Derive `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits
   - Derive `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits
 
@@ -654,3 +653,54 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 - `partiesList[]` entries: `{ "partyId": "", "partyName": "", "externalId": "" }`
 - `nonPartiesList[]` entries: `{ "externalId": "", "name": "" }`
 
+---
+
+### Appendix G. `get_conflicts_search` Response Guide (`properties=resultsPlusMoodysGRID`)
+
+### Key Fields
+
+| Field | Description |
+|---|---|
+| `searchId` | The conflict search ID |
+| `moodysGRIDHitCount` | Number of Moody's GRID hits enriched |
+| `moodysGRIDSkipped` | Hits skipped due to 25-hit limit (only present if > 0) |
+| `results[]` | All conflict hits — non-Moody's hits pass through unchanged |
+| `results[].moodysGRID` | Present on Moody's GRID hits only |
+| `results[].moodysGRID.name` | Entity name from Moody's GRID |
+| `results[].moodysGRID.eventCategories[]` | Unique category codes from all events (e.g. `SNX`, `PEP`) |
+| `results[].moodysError` | Present if enrichment failed for that hit |
+| `results[].resolution` | Conflict resolution status |
+
+### Sample Response
+
+```json
+{
+  "searchId": "15221",
+  "moodysGRIDHitCount": 1,
+  "results": [
+    {
+      "name": "Gazprom Teploenergo",
+      "resultId": "281209988",
+      "type": "Moody's GRID",
+      "resolution": "",
+      "status": "Active",
+      "searchTerm": "GAZPROM TEPLOENERGO, AO",
+      "moodysGRID": {
+        "name": "AO Gazprom Teploenergo",
+        "eventCategories": ["SNX", "REG"]
+      }
+    },
+    {
+      "name": "Some Other Party",
+      "resultId": "99001",
+      "type": "Internal",
+      "resolution": "Cleared"
+    }
+  ]
+}
+```
+
+### Notes
+- Non-Moody's hits are returned as-is with no `moodysGRID` field
+- If enrichment fails for a hit, `moodysGRID` will be `null` and `moodysError` will describe the failure
+- Enrichment is capped at **25 Moody's hits** per call, processed in batches of 5
