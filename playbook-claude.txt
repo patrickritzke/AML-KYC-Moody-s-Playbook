@@ -476,16 +476,21 @@ After the column assignment block, render the results table.
 
 **Column definitions:**
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
-- **Risk Score** — `{riskLevel}` `{riskScore}` from Step 7b
+- **Risk Score** — `{riskLevel}` `{riskScore}` from Step 7b. If riskScore = 0, display `⬜ No Risk` with no score value.
 - **Relationship** — `Client` for the client row; relationship label for all others
 - **Strong Match** — all hits where `weight = fullWeight`
 - **Moderate Match** — all hits where `weight = partialWeight`
 - **Weak Match** — all hits where `weight = noWeight`
 
-**Cell format for each match column:**
 1. **Bold summary line** — deduplicated event codes across all hits assigned to that column only
 2. One blank line
-3. Indented italic hit count: `&nbsp;&nbsp;`*`{n} Moody's profile(s)`*
+3. Indented italic hit counts, with no blank line between them but one blank line separating them from the summary line above:
+
+   **{event codes}**
+
+   &nbsp;&nbsp;*{n} Auto-Matched Hits*
+   &nbsp;&nbsp;*{n} Matched Hits*
+   Omit a line if its count is 0.
 4. Render `—` when no hits of that weight exist for that party
 
 **Sort order:** Client row first, then related parties sorted by `riskScore` descending.
@@ -554,7 +559,8 @@ Playbook ended but not completed.
 ### Appendix
 
 #### A. Display Preferences
-- **Risk Scores:** 🔴 High, 🟠 Medium, 🔘 Low
+- **Risk Scores:** 🔴 High, 🟠 Medium, 🔘 Low, None
+  - None if risk score is 0
 - **Client Indicator:** 🔷 next to client name
 - **Related Party Indicator:** 🔹 next to party name
 - **New Party Indicator:** 🆕 before 🔹 when `isNew` = `true`
@@ -577,7 +583,8 @@ Evaluate in order, stop at first match:
 |---|---|
 | 🔴 High | ≥ 67 |
 | 🟠 Medium | 40 – 67 |
-| 🔘 Low | 0 – 39 |
+| 🔘 Low | 1 – 39 |
+| None | 0 |
 
 `noWeight.riskEvents` do not contribute to score.
 
@@ -590,6 +597,7 @@ Start with the client party's `riskScore` as the baseline. Then for each related
 | 🔴 High | +10 |
 | 🟠 Medium | +5 |
 | 🔘 Low | +1 |
+| None | +0 |
 
 Overall score = `client riskScore` + sum of all related party contributions, capped at 100.
 
@@ -597,7 +605,8 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 |---|---|
 | 🔴 High | ≥ 67 |
 | 🟠 Medium | 34 – 66 |
-| 🔘 Low | 0 – 33 |
+| 🔘 Low | 1 – 33 |
+| None | 0 |
 
 #### D. `intapp:create_request` API Details
 
