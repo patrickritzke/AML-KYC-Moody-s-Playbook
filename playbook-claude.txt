@@ -476,11 +476,11 @@ After the column assignment block, render the results table.
 
 **Column definitions:**
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
-- **Risk Score** — `{riskLevel}` `{riskScore}` from Step 7b. If riskScore = 0, display `⬜ No Risk` with no score value.
+- **Risk Score** — `{riskLevel}` (`{riskScore}`) from Step 7b. If riskScore = 0, display `-` with no score value or icon.
 - **Relationship** — `Client` for the client row; relationship label for all others
-- **Strong Match** — all hits where `weight = fullWeight`
-- **Moderate Match** — all hits where `weight = partialWeight`
-- **Weak Match** — all hits where `weight = noWeight`
+- **Strong Matches** — all hits where `weight = fullWeight`
+- **Moderate Matches** — all hits where `weight = partialWeight`
+- **Weak Matches** — all hits where `weight = noWeight`
 
 1. **Bold summary line** — deduplicated event codes across all hits assigned to that column only
 2. One blank line
