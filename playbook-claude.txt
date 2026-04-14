@@ -408,11 +408,34 @@ Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(aut
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 📊 Calculating client and corporate structure relationshiop risk scores... |
+| **Status Message** | 📊 Calculating client and corporate structure relationship risk scores... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
-- For each entry in `{moodysHitEvents}[]`, apply party-level risk scoring rules from Appendix B
-- Set `riskScore` and `riskLevel` on each entry
+For each entry in `{moodysHitEvents}[]`, apply the following scoring rules in order, stopping at the first match. Evaluate `summary.fullWeightEvents` and `summary.partialWeightEvents` **independently and in sequence** — do not skip the partialWeight critical check if fullWeightEvents is empty or absent.
+
+1. If any Critical code appears in `summary.fullWeightEvents` → `riskScore` = 100, `riskLevel` = 🔴 High. Stop.
+2. If any Critical code appears in `summary.partialWeightEvents` → `riskScore` = 10, `riskLevel` = 🔴 High. Stop.
+3. Otherwise, compute point sum:
+   - For each unique code in `summary.fullWeightEvents`: add full weight value from tier table below
+   - For each unique code in `summary.partialWeightEvents`: add partial weight value from tier table below (round down per code)
+   - Sum all values → set `riskScore`, derive `riskLevel` from threshold table below
+
+| Tier | Codes | Full Weight | Partial Weight |
+|---|---|---|---|
+| Critical | BLK, BRB, BUS, DEN, FOF, FOS, FRD, IRC, MLA, ORG, PEP, REG, SEC, SEX, SNX, TER, WLT | 100 → instant 🔴 High | 10 → instant 🔴 High |
+| Valuable | CFT, CYB, DTF, ENV, FUG, GAM, HUM, IMP, KID, LMD, LNS, MOR, MSB, MUR, OBS, PRJ, RES, SMG, SPY, TAX, TFT, TRF, VCY | 5 | 2 |
+| Investigative | ARS, AST, BUR, CON, DPS, FOR, IGN, PSP, ROB | 3 | 1 |
+| Probative | ABU, CPR, IPR, MIS, NSC | 1 | 0 |
+
+| Risk Level | Score |
+|---|---|
+| 🔴 High | ≥ 10 |
+| 🟠 Medium | 4 – 9 |
+| 🔘 Low | 0 – 3 |
+
+`noWeight` event codes never contribute to score and are excluded from all summary arrays.
+
+Set `riskScore` and `riskLevel` on each entry in `{moodysHitEvents}[]`.
 
 ---
 
@@ -450,7 +473,11 @@ Total hits per party must equal: `fullWeight(auto+confirmed) + partialWeight(aut
 | 🔷 `{partyName}` (`{partyId}`) | 🔴/🟠/🔘 | Client | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (confirmed no match: #) |
 | 🔹 `{partyName}` (`{partyId}`) | 🔴/🟠/🔘 | corpStructure | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (auto match hits: #, confirmed match hits: #) | unique event codes (confirmed no match: #) |
 
-Use `—` for any column where there are no events of that type.
+**Column population rules — apply strictly:**
+- Populate each column directly from `summary.fullWeightEvents`, `summary.partialWeightEvents`, and `noWeight` hit event codes respectively
+- **Never derive column content from `riskScore` or `riskLevel`** — a party with no fullWeight hits must still show its partialWeight events if they exist
+- Render `—` only when the corresponding summary array is genuinely empty after Step 7a processing
+- Hit counts in parentheses are always split by `auto` vs `confirmed` — show both even if one is zero (e.g. `auto: 3, confirmed: 0`)
 
 **GO TO** Step 9
 
