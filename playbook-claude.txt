@@ -581,7 +581,7 @@ For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
 
   | Column | Source |
   |---|---|
-  | `dateComplete` | `{ "dateValue": "<today ISO 8601>" }` |
+  | `dateComplete` | `{ "dateValue": "<today date and time ISO 8601, e.g. 2026-04-15T18:50:44Z>" }` |
   | `reqID` | `{ "stringValue": "{reqID}" }` |
   | `riskScore` | `{ "stringValue": "{moodysHitEvents}[i].riskLevel ({moodysHitEvents}[i].riskScore)" }` — use `"None"` if `riskScore` = 0 or null |
   | `riskEvents` | `{ "stringValue": "comma-separated deduplicated codes across {moodysHitEvents}[i].summary.fullWeightEvents + {moodysHitEvents}[i].summary.partialWeightEvents, or 'None'" }` |
@@ -589,6 +589,8 @@ For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
   | `confirmedRiskId` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].gridId where hits[].confirmed = true, or ''" }` |
   | `strongRiskEvents` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].eventCodes where hits[].weight = 'fullWeight', or 'None'" }` |
   | `strongRiskId` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].gridId where hits[].weight = 'fullWeight', or ''" }` |
+  | `ranForClient` | `{ "stringValue": "{clientPartyName} ({clientPartyId})" }` — same value for every party in this loop |
+  | `relationship` | `{ "stringValue": "Parent" }` the same relationship label(s) displayed in the **Name (ID)** and **Relationship** columns for this party in the Step 8 results table — comma-separated. Use "Client" if it is the client party |
 
 - Call `intapp:update_party` with `partyId` and
   `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`.
