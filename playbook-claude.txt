@@ -443,7 +443,7 @@ Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvent
 |---|---|
 | **Type** | Display |
 | **Status Message** | *(none — display output is the communication)* |
-| **Notification Rule** | Output the column assignment block first, then the table. No other commentary. |
+| **Notification Rule** | Zero output permitted during this step except the status message above. |
 
 ##### Pre-Render Column Assignment
 
