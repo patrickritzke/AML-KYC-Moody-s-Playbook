@@ -156,15 +156,14 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | **Notification Rule** | Only show status, prompt, and options. Do not show any commentary or narration |
 
 - Call `intapp:search_parties` with:
-  - `filter._moodyAgentNextFrom` = 90 days before today (ISO 8601)
-  - `filter._moodyAgentNextTo` = today's date (ISO 8601)
-  - `filter.externalDataProvider` = `BureauVanDijk`
+  - `filter._moodyAgentNextFrom` = 90 days before today (ISO 8601, e.g. `2026-01-15T00:00:00Z`)
+  - `filter._moodyAgentNextTo` = today's date (ISO 8601, e.g. `2026-04-15T23:59:59Z`)
 - If the call fails or returns no results → **GO TO** Step END
-- If results are returned, present as a lettered list (up to 10):
+- If results are returned, present as a lettered list (up to 20). Sort by overdue date from _moodyAgentNext compared to today (don't include time).
   > *The following parties are due for AML/KYC review. Which would you like to run?*
   >
-  > - **A** — Party Name (ID)
-  > - **B** — Party Name (ID)
+  > - **A** — Party Name (ID) - Overdue by # Days
+  > - **B** — Party Name (ID) - Overdue by # Days
   > - *(up to 10 options)*
 - Wait for user to type a letter:
   - Set `{clientPartyId}`, `{clientPartyName}`, `{clientPartyExternalId}`, `{clientPartyExternalIdProvider}` from the selected result
