@@ -536,14 +536,6 @@ WAIT for user input:
 
 > | Field | Value |
 > |---|---|
-> | **Type** | Display |
-> | **Status Message** | *(none)* |
-> | **Notification Rule** | Return results only |
-
-#### ▶️ **Step COMPLETE**
-
-> | Field | Value |
-> |---|---|
 > | **Type** | Processing → Display |
 > | **Status Message** | 💾 Saving AML/KYC results to party profiles... |
 > | **Notification Rule** | Status message only during processing. Return results display only. No commentary or narration. |
@@ -564,7 +556,7 @@ For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
 ```
 
 - **Parse** the `_moodyAgentRuns` XML string back into `TableCellData` rows using
-  the pattern defined in `patching-moodyAgentRuns.md` Step 2. If `xml` is absent,
+  the pattern defined in Appendix. If `xml` is absent,
   null, or empty string, treat as an empty rows array.
 
 - **Before patching**, output one line per party:
@@ -589,6 +581,8 @@ For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
   | `confirmedRiskId` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].gridId where hits[].confirmed = true, or ''" }` |
   | `strongRiskEvents` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].eventCodes where hits[].weight = 'fullWeight', or 'None'" }` |
   | `strongRiskId` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].gridId where hits[].weight = 'fullWeight', or ''" }` |
+  | `modRiskEvents` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].eventCodes where hits[].weight = 'partialWeight', or 'None'" }` |
+  | `modRiskId` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].gridId where hits[].weight = 'partialWeight', or ''" }` |
   | `ranForClient` | `{ "stringValue": "{clientPartyName} ({clientPartyId})" }` — same value for every party in this loop |
   | `relationship` | `{ "stringValue": "Parent" }` the same relationship label(s) displayed in the **Name (ID)** and **Relationship** columns for this party in the Step 8 results table — comma-separated. Use "Client" if it is the client party |
 
@@ -912,7 +906,7 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 
 ---
 
-# Risk Score Reasoning
+### Appendix J Risk Score Reasoning
 
 ## {partyName} (`{partyId}`) — Score: {riskScore} {riskLevel}
 
@@ -923,3 +917,45 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 
 **Total: {riskScore} {riskLevel}**
 
+### Appendix K Patching `_moodyAgentRuns` on a Party (Intapp API)
+
+`_moodyAgentRuns` is a DataTable custom field on the Party entity. The PATCH endpoint replaces the entire table — appending requires a read-modify-write: GET existing rows, parse XML, append new row, PATCH full array.
+
+**Endpoint:** `PATCH /api/common/v1/parties/{partyId}` → `204 No Content`
+
+---
+
+## Column Definitions
+
+| Key | Display Name | Type |
+|---|---|---|
+| `dateComplete` | Date Completed | Date — ISO 8601 with time, e.g. `2026-04-15T20:42:23Z` |
+| `reqID` | Request ID | String |
+| `riskScore` | Risk Score | String — e.g. `"Medium (28)"` or `"None"` |
+| `riskEvents` | Risk Events | String — comma-separated event codes or `"None"` |
+| `confirmedRiskEvents` | Risk Events - Confirmed | String |
+| `confirmedRiskId` | Risk Ids - Confirmed | String |
+| `strongRiskEvents` | Risk Events - Strong Match | String |
+| `strongRiskId` | Risk Ids - Strong Match | String |
+| `modRiskEvents` | Risk Events - Moderate Match | String |
+| `modRiskId` | Risk Ids - Moderate Match | String |
+| `ranForClient` | Ran for Client | String — `"{clientPartyName} ({clientPartyId})"` |
+| `relationship` | Relationship to Client | String — e.g. `"GUO, Parent"` or `"Client"` |
+
+> `ranForClient` and `relationship` must be added to the table schema in the Intapp form designer before they can be written via the API.
+
+---
+
+## Rules
+
+- Each cell must be a **typed object**: `{ "stringValue": "..." }` or `{ "dateValue": "..." }` — plain strings cause `400`
+- GET response returns `_moodyAgentRuns` as raw XML — parse back to `TableCellData` before re-patching
+- The GET tool result is wrapped in a content block — unwrap before accessing:
+  ```
+  if result is array       → result = result[0]
+  if result has key "text" → result = JSON.parse(result.text); if array → result[0]
+  xml = result._moodyAgentRuns ?? ""
+  ```
+- If `_moodyAgentRuns` is absent or empty → treat as `rows: []`
+- To clear the table: `{ "_moodyAgentRuns": { "rows": [] } }`
+- Only include `_moodyAgentRuns` in the body — all other party fields are left untouched
