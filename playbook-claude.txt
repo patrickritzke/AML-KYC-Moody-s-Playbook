@@ -1,23 +1,23 @@
-### Scope
-Complete AML/KYC initiation workflow triggered by natural language command (e.g., "Initiate AML/KYC for Acme Capital LLC"). Covers client lookup, corporate tree resolution, party scoping, conflicts-based risk screening via Moody's GRID, risk scoring, match acceptance, and ongoing monitoring setup.
+# AML/KYC Playbook
 
-### Goals
+## Scope
+Complete AML/KYC initiation workflow triggered by natural language command (e.g., "Initiate AML/KYC for Acme Capital LLC"). Covers client lookup, corporate tree resolution, party scoping, conflicts-based risk screening via Moody's GRID, risk scoring, and match acceptance.
+
+## Goals
 - Automate end-to-end AML/KYC initiation with minimal manual intervention
 - Ensure comprehensive corporate structure screening with user-controlled scope
 - Deliver risk-scored results with clear HIGH/MEDIUM/LOW event classification
-- Establish ongoing monitoring and schedule periodic reviews
 
 ---
 
-### Test Companies
+## Test Companies
 - When I say run Test, use party ID 522426593 - I just want to quickly get it going
 
-### Playbook Variables
+---
 
-#### Debug Mode
-- `{debug}` = `TRUE` if user input includes "with debug" — when `TRUE`, output a variable state block after every step using the format defined in the Debug section below
+## Playbook Variables
 
-#### Hardcoded
+### Hardcoded
 - `{yourhost}` = `"shalaka2-sand.opensandbox2.intapp.com"`
 - `{reqType}` = `"AML/KYC - Moody's GRID"`
 - `{reqRefParty}` = `"Party"`
@@ -30,24 +30,21 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - `{reqRefGridPossibleMatch}` = `"Possible Matches"`
   - `{reqRefGridLikelyMatch}` = `"Likely Matches"`
   - `{reqRefGridLikelyMatchRiskEvent}` = `"Likely Matches Risk Events"`
-- '{conResMatch}' = "Moody's GRID - Is Not a Match"
-- '{conResNoMatch}' = "Moody's GRID - Is a Match"
-- `{fullWeightAutoMatchMin}`    = `0.70`  — minimum matchScore for auto match to be classified fullWeight (Likely)
+- `{conResMatch}` = `"Moody's GRID - Is a Match"`
+- `{conResNoMatch}` = `"Moody's GRID - Is Not a Match"`
+- `{fullWeightAutoMatchMin}` = `0.70`  — minimum matchScore for auto match to be classified fullWeight (Likely)
 - `{partialWeightAutoMatchMin}` = `0.50`  — minimum matchScore for auto match to be classified partialWeight (Unlikely)
 
-#### Client Party
+### Client Party
 - `{clientPartyId}` — Intapp party ID of the client
 - `{clientPartyName}` — Display name of the client
 - `{clientPartyExternalId}` — External ID of the client (e.g. Moody's GRID ID)
 - `{clientPartyExternalIdProvider}` — Provider that issued the external ID
 
-#### Corporate Tree
-- `{treeGUO[]}` — Array of `rootCompanyId`s, one per corporate tree found on the client profile
-
-#### Related Parties
+### Corporate Structure Relationships
 - `{relatedParties}` — Single object tracking all corporate structure relationships. Each key holds a count of all entities (`total`), a count of those already Intapp parties (`parties`), and the list of matched party records (`list`):
 
-\`\`\`json
+```json
 {
   "clientExternalId": "",
   "providerType": "",
@@ -61,43 +58,43 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
     "UBO":                { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] }
   }
 }
-\`\`\`
+```
 
 - `partiesList[]` entries: `{ "partyId": "", "partyName": "", "externalId": "" }`
 - `nonPartiesList[]` entries: `{ "externalId": "", "name": "" }`
 
-#### Request & Conflicts
+### Request & Conflicts
 - `{reqID}` — ID of the created request
 - `{conID}` — ID of the created conflicts search
 
-### Moody's GRID Matches
-- `{moodysHitEvents}` — Array of screened party risk objects, one entry per search party
+### Overall Risk
+- `{overallRiskScore}` — set by playbook (Step 7c)
+- `{overallRiskLevel}` — set by playbook (Step 7c)
 
-```json
-#### Moody's GRID Matches
-- `{moodysHitEvents}` — Array of screened party risk objects, one entry per search party. Populated in Step 6, classified and scored in Steps 7 and 7a.
+### Moody's GRID Matches
+- `{moodysHitEvents}` — Array of screened party risk objects, one entry per search party. Populated in Step 6, classified and scored in Steps 7a and 7b.
 
 ```json
 [
   {
-    "partyId":      string,
-    "partyName":    string,
-    "relationship": string,
-    "riskScore":    integer | null,
-    "riskLevel":    "High" | "Medium" | "Low" | null,
+    "partyId":      "string",
+    "partyName":    "string",
+    "relationship": "string",
+    "riskScore":    "integer | null",
+    "riskLevel":    "High | Medium | Low | null",
     "summary": {
-      "fullWeightEvents":    string[],
-      "partialWeightEvents": string[]
+      "fullWeightEvents":    "string[]",
+      "partialWeightEvents": "string[]"
     },
     "hits": [
       {
-        "gridId":     string,
-        "resolution": string | null,
-        "weight":     "unknownWeight" | "fullWeight" | "partialWeight" | "noWeight",
-        "auto":       boolean | null,
-        "confirmed":  boolean | null,
-        "eventCodes": string[],
-        "matchScore": number | null
+        "gridId":     "string",
+        "resolution": "string | null",
+        "weight":     "unknownWeight | fullWeight | partialWeight | noWeight",
+        "auto":       "boolean | null",
+        "confirmed":  "boolean | null",
+        "matchScore": "number | null — null until Step 7a",
+        "eventCodes": "string[]"
       }
     ]
   }
@@ -107,77 +104,42 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **Rules:**
 - One entry in `{moodysHitEvents}` per `searchParty`
 - One entry in `hits[]` per Moody's GRID hit
-- All hits initialised as `unknownWeight` in Step 6; reclassified in Step 7
-- `auto` and `confirmed` are `null` until Step 7; thereafter mutually exclusive — only one is ever `true` per hit
+- All hits initialised as `unknownWeight` in Step 6; reclassified in Step 7a
+- `auto` and `confirmed` are `null` until Step 7a; thereafter mutually exclusive — only one is ever `true` per hit
 - `noWeight` hits are either manually confirmed (`resolution` = `{conResNoMatch}`, `confirmed: true`) or auto-classified (matchScore < `{partialWeightAutoMatchMin}`, `auto: true`)
-- `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits; populated in Step 7
-- `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits; populated in Step 7
+- `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits; populated in Step 7a
+- `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits; populated in Step 7a
 - `noWeight` events are excluded from `summary`
-- `riskScore` and `riskLevel` are `null` until Step 7a
-
-#### Runtime Flags
-- `{useChromeMCP}` — `TRUE` if Chrome MCP is available; `FALSE` if unavailable or call fails. Evaluated again at each step when required. 
+- `riskScore` and `riskLevel` are `null` until Step 7b
 
 ---
 
-### Debug Behavior
-- When `{debug}` = `TRUE`, output the following block after every step (even silent ones):
-
-  ```
-  🐛 DEBUG — Step [X]
-  clientPartyId:              [value]
-  clientPartyName:            [value]
-  clientPartyExternalId:      [value]
-  clientPartyExternalIdProvider: [value]
-  treeGUO[]:                  [value]
-  relatedParties.GUO:         { parties: #, total: #, partieslist: [...] }
-  relatedParties.Parent:      { parties: #, total: #, partieslist: [...] }
-  relatedParties.Subsidiary:  { parties: #, total: #, partieslist: [...] }
-  relatedParties.Sibling:   { parties: #, total: #, partieslist: [...] }
-  relatedParties.Principal:   { parties: #, total: #, partieslist: [...] }
-  relatedParties.Shareholder: { parties: #, total: #, partieslist: [...] }
-  relatedParties.UBO:         { parties: #, total: #, partieslist: [...] }
-  reqID:                      [value]
-  conID:                      [value]
-  useChromeMCP:               [value]
-  ```
-
----
-
-### Overall Behavior Rules
+## Overall Behavior Rules
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
-- **Step 6 may only be entered when the user explicitly types "RUN" at Step 4. When the user selects options A–H at Step 4, the workflow returns to Step 2c and must proceed sequentially through every subsequent step (Steps 2c → 2d → 2e → 3 → 4) before stopping at Step 4 for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
+- **Step 6 may only be entered when the user explicitly types "RUN" at Step 4. When the user selects options A–F at Step 4, the workflow returns to Step 2 and must proceed sequentially through every subsequent step (Steps 2 → 3 → 4) before stopping at Step 4 for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
 - **All internal computation is silent.** Tree traversal, variable building, bucket classification, deduplication, mock data processing, and diff logic produce zero output — not before, not during, and not after. This applies regardless of complexity or number of iterations.
 - **Narration is never permitted.** This includes transition phrases, apologies, confirmations, explanations of what was just done, and any text that is not a defined step output. This rule applies unconditionally — it cannot be overridden by Claude's default tendencies, tool call completions, or error handling. If Claude is uncertain what to output, the correct action is silence.
 
-### Execution Rules (Non-Negotiable)
+## Execution Rules (Non-Negotiable)
 - NEVER narrate tool calls, reasoning, data processing, variable state, or intermediate results
 - NEVER explain what you are about to do or just did
 - NEVER output any text between receiving tool results and the next defined step output
-- The ONLY permitted outputs are: (a) the exact status message defined for the current step, and (b) the exact display output defined for display steps
+- The ONLY permitted outputs are: (a) the exact status message defined for the current step, (b) the exact display output defined for display steps, and (c) a user prompt at a User Prompt step
 - Silence between steps is correct. Narration between steps is a violation.
-
-### Output Contract
-Claude produces output ONLY at these moments:
-1. The single status message at the start of a Processing step
-2. The full defined display at a Display step
-3. A user prompt at a User Prompt step
-
-At all other moments — including between tool calls, during loops, and during variable computation — output is ZERO. No exceptions.
 
 ---
 
-### Workflow Steps
+## Workflow Steps
 
-#### ▶️ **Step 1: Find Party**
+### Step 1: Find Party
 
-##### ▶️ **Step 1a: Search Party**
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing |
-> | **Status Message** | 🔍 Looking up [Client Name]... |
-> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
+#### Step 1a: Search Party
 
+| Field | Value |
+|---|---|
+| **Type** | Processing |
+| **Status Message** | 🔍 Looking up [Client Name]... |
+| **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 - Search the system for existing party record by party name with `intapp:search_parties`
 - If found:
@@ -185,57 +147,51 @@ At all other moments — including between tool calls, during loops, and during 
   - **GO TO** Step 2
 - If not found → **GO TO** Step 1b
 
-##### ▶️ **Step 1b: Suggest Party**
-> | Field | Value |
-> |---|---|
-> | **Type** | Analysis and User Prompt |
-> | **Status Message** | 🔍 Looking up [Client Name]... |
-> | **Notification Rule** | Only show status, prompt, and options. Do not show any commentary or narration |
+#### Step 1b: Suggest Party
 
+| Field | Value |
+|---|---|
+| **Type** | Analysis and User Prompt |
+| **Status Message** | 🔍 Finding parties due for AML/KYC review... |
+| **Notification Rule** | Only show status, prompt, and options. Do not show any commentary or narration |
 
-- If `{useChromeMCP}`:
-  - Call `tabs_context_mcp` to verify Chrome is available and get active tab list
-  - If the call fails:
-    - Set `{useChromeMCP}` = `FALSE`
-    - **GO TO** Step END
-  - If the call succeeds:
-    - Determine if a `{yourhost}` tab is active
-    - If no `{yourhost}` tab found → **GO TO** Step END
-    - If a `{yourhost}` tab is active:
-      - Read the active tab page contents
-      - Detect up to 10 party names on the page (prioritize those in `Name (ID)` format)
-      - If no party names detected → **GO TO** Step END
-      - If party names detected, present as a lettered list:
-        > *I see you're working on [description of page]. Would you like to run AML/KYC on any of these parties?*
-        >
-        > - **A** — Party Name (ID)
-        > - **B** — Party Name (ID)
-        > - *(up to 10 options)*
-      - Wait for user to type a letter → **GO BACK TO** Step 1a with that party name
+- Call `intapp:search_parties` with:
+  - `filter._moodyAgentNextFrom` = 90 days before today (ISO 8601)
+  - `filter._moodyAgentNextTo` = today's date (ISO 8601)
+  - `filter.externalDataProvider` = `BureauVanDijk`
+- If the call fails or returns no results → **GO TO** Step END
+- If results are returned, present as a lettered list (up to 10):
+  > *The following parties are due for AML/KYC review. Which would you like to run?*
+  >
+  > - **A** — Party Name (ID)
+  > - **B** — Party Name (ID)
+  > - *(up to 10 options)*
+- Wait for user to type a letter:
+  - Set `{clientPartyId}`, `{clientPartyName}`, `{clientPartyExternalId}`, `{clientPartyExternalIdProvider}` from the selected result
+  - **GO TO** Step 2
 
 ---
 
-#### ▶️ **Step 2: Identify Party Corporate Structure Relationships**
+### Step 2: Identify Party Corporate Structure Relationships
 
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing |
-> | **Status Message** | 🌳 Finding corporate structure... |
-> | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
+| Field | Value |
+|---|---|
+| **Type** | Processing |
+| **Status Message** | 🌳 Finding corporate structure... |
+| **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 - Call `intapp:get_corp_structure_party_relationships` with:
   - `party_id` = `{clientPartyId}`
-  - `include_non_parties` = `false` (if user opted in to review missing parties)
+  - `include_non_parties` = `false`
 - From the response, capture:
   - `{clientExternalId}` and `{providerType}`
   - `{relatedParties}` — per-bucket counts and `partiesList` of matched Intapp parties
-  - `{relatedParties.[key].nonPartiesList}` — unmatched entities per bucket (when `include_non_parties` = true)
 - If no corporate trees found → **GO TO** Step END
 - **GO TO** Step 3
 
 ---
 
-#### ▶️ Step 3: Display Client & Key Corporate Structure Relationships
+### Step 3: Display Client & Key Corporate Structure Relationships
 
 | Field | Value |
 |---|---|
@@ -245,7 +201,6 @@ At all other moments — including between tool calls, during loops, and during 
 
 - Build the table from `{relatedParties}`: iterate each bucket (GUO, Parent, Subsidiary, Sibling, Management/Board, Shareholder, UBO), collect all entries from each `partiesList`, group by `partyId`, and merge relationship labels for any party that appears in multiple buckets.
   - See **Appendix F** for `{relatedParties}` full schema.
-
 
 Display the following to the user:
 
@@ -265,16 +220,13 @@ Display the following to the user:
 
 ---
 
-#### ▶️ Step 4: Prompt User to Add More Key Corporate Structure Relationships to Screen
+### Step 4: Prompt User to Add More Key Corporate Structure Relationships to Screen
 
 | Field | Value |
 |---|---|
 | **Type** | User Prompt |
 | **Status Message** | *(none — display output is the communication)* |
 | **Notification Rule** | Only show prompt and options. Do not show commentary or narration |
-
-- For each relationship option below, evaluate using `{relatedParties}` and categorize:
-  - See **Appendix F** for `{relatedParties}` full schema.
 
 For each relationship option below, evaluate using `{relatedParties}` and categorize:
 
@@ -308,34 +260,34 @@ Display the following prompt:
 WAIT for user input:
 
 - If user types one or more option letters:
-  - For each selected relationship, identify all `externalId`s in `{relatedParties.[key].list}` that are **not** yet Intapp parties (i.e. not in any `list[]`)
-  - For each non-party entity, call `intapp:create_party` to create it
-    - On success, append `partyId` to `{newlyCreatedParties[]}`
+  - Re-call `intapp:get_corp_structure_party_relationships` with `party_id` = `{clientPartyId}` and `include_non_parties` = `true`
+  - For each selected bucket, use the returned `nonPartiesList` entries to create missing parties via `intapp:create_party`, silently capped at 15 total creations across all buckets
     - On failure, note the error and continue with remaining entities
-  - Once all creation attempts complete → **GO TO** Step 2c and proceed sequentially through Steps 2 → 3 → 4
+  - Once all creation attempts complete → **GO TO** Step 2 and proceed sequentially through Steps 2 → 3 → 4
 - If user types `RUN` → **GO TO** Step 5
 
 ---
 
-#### ▶️ **Step 5: Create Request and Conflicts Screen**
+### Step 5: Create Request and Conflicts Screen
 
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing |
-> | **Status Message** | 🛡️ Creating request and Moody's GRID screen... |
-> | **Notification Rule** | Status message only. Do not show commentary or narration. |
+| Field | Value |
+|---|---|
+| **Type** | Processing |
+| **Status Message** | 🛡️ Creating request and Moody's GRID screen... |
+| **Notification Rule** | Status message only. Do not show commentary or narration. |
 
 - Create a request with `intapp:create_request`
-  - See Appendix C for API body/XML details
+  - See Appendix D for API body/XML details
   - Set `{reqID}` from response
 - Create a conflicts search linked to the request with `intapp:create_conflicts_search`
-  - See Appendix D for API body details
+  - See Appendix E for API body details
   - Link to request with `{reqID}`
   - Set `{conID}` from response
 - Run conflicts search with `intapp:run_conflicts_search` using `{conID}`
 
 ---
-#### ▶️ **Step 6: Fetch Moody's GRID Hits**
+
+### Step 6: Fetch Moody's GRID Hits
 
 | Field | Value |
 |---|---|
@@ -356,15 +308,14 @@ WAIT for user input:
     - `weight` = `"unknownWeight"` — placeholder; recategorized in Step 7a
     - `auto` = `null` — set in Step 7a
     - `confirmed` = `null` — set in Step 7a
+    - `matchScore` = `null` — set in Step 7a
   - `riskScore`, `riskLevel`, `summary` — left empty; populated in Steps 7b and 7c
 
 ---
 
-#### ▶️ **Step 7: Analyze Moody's GRID Hits**
+### Step 7: Analyze Moody's GRID Hits
 
----
-
-#### ▶️ **Step 7a: Categorize Weight**
+#### Step 7a: Categorize Weight
 
 | Field | Value |
 |---|---|
@@ -400,20 +351,21 @@ WAIT for user input:
 | null / other | ≥ `{partialWeightAutoMatchMin}` and < `{fullWeightAutoMatchMin}` | `partialWeight` | true | false |
 | null / other | < `{partialWeightAutoMatchMin}` | `noWeight` | true | false |
 
-- **Auto-classification rule for `{hitWeightNone}`:** Hits classified as `noWeight` fall into two subtypes:
+- **Auto-classification rule for `noWeight`:** Hits classified as `noWeight` fall into two subtypes:
   - **Manually confirmed** (`resolution` = `{conResNoMatch}`): `confirmed` = `true`, `auto` = `false`
   - **Auto-classified** (matchScore < `{partialWeightAutoMatchMin}`): `auto` = `true`, `confirmed` = `false`
   In both cases, event codes are excluded from `summary` arrays and never contribute to risk score.
 
 - For each party, update its entry in `{moodysHitEvents}[]`:
   - Set `weight`, `auto`, `confirmed`, and `matchScore` on each hit object
-  - Derive `summary.fullWeightEvents` — deduplicated event codes across all `{hitWeightFull}` hits
-  - Derive `summary.partialWeightEvents` — deduplicated event codes across all `{hitWeightPartial}` hits
+  - Derive `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits
+  - Derive `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits
 
-Total hits per party must equal: `{hitWeightFull}(auto+confirmed)` + `{hitWeightPartial}(auto)` + `{hitWeightNone}(auto+confirmed)`
+Total hits per party must equal: fullWeight hits (auto + confirmed) + partialWeight hits (auto only) + noWeight hits (auto + confirmed)
 
 ---
-#### ▶️ **Step 7b: Party Risk Score**
+
+#### Step 7b: Party Risk Score
 
 | Field | Value |
 |---|---|
@@ -425,7 +377,7 @@ For each entry in `{moodysHitEvents}[]`, apply the scoring rules defined in **Ap
 
 ---
 
-#### ▶️ **Step 7c: Overall Risk Score**
+#### Step 7c: Overall Risk Score
 
 | Field | Value |
 |---|---|
@@ -437,36 +389,28 @@ Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvent
 
 ---
 
-#### ▶️ **Step 8: Display Moody's GRID Screen Results and Risk**
+### Step 8: Display Moody's GRID Screen Results and Risk
 
 | Field | Value |
 |---|---|
 | **Type** | Display |
 | **Status Message** | *(none — display output is the communication)* |
-| **Notification Rule** | Zero output permitted during this step except the status message above. |
+| **Notification Rule** | Return ONLY the display specified below. Do not add commentary, preamble, or narration of any kind. |
 
-##### Pre-Render Column Assignment
+#### Column Assignment (Silent)
 
-For every party in `{moodysHitEvents}[]` that has at least one hit:
+For every party in `{moodysHitEvents}[]`, silently assign each hit to a display column based solely on `weight`:
+- `fullWeight` → **Strong Match**
+- `partialWeight` → **Moderate Match**
+- `noWeight` → **Weak Match**
 
-```
-⚙️ Column Assignment — {partyName}
-{gridId} | GRID name: "{moodysGRID.name}" | searchTerm: "{searchTerm}" | matchScore: {matchScore} | weight: {weight} → {column}
-{gridId} | GRID name: "{moodysGRID.name}" | searchTerm: "{searchTerm}" | matchScore: {matchScore} | weight: {weight} → {column}
-...
-fullWeight: {n} hits | partialWeight: {n} hits | noWeight: {n} hits | total: {n} hits ✓
-```
-
-Rules:
-- `{column}` is one of: `Strong Match`, `Moderate Match`, `Weak Match` — derived solely from `weight`
-- The total count must equal `hits[].length` for that party. If it does not, stop and correct before proceeding.
-- For errored hits (where `moodysGRID` is null due to `moodysError`): assign weight based on matchScore as normal, note `[enrichment error — event codes unavailable]`, and include in the count.
+For errored hits where `moodysGRID` is null due to `moodysError`: assign weight based on matchScore as normal and note `[enrichment error — event codes unavailable]`.
 
 > ⚠️ Column placement is determined solely by `weight`. Event code severity (including Critical codes such as WLT, SNX, PEP) affects `riskScore` only — it never promotes a hit to a higher-weight column. A `partialWeight` hit with WLT goes in **Moderate Match**, always.
 
-##### Render
+Verify that the total assigned hits per party equals `hits[].length` for that party before rendering. If counts do not match, correct before proceeding.
 
-After the column assignment block, render the results table.
+#### Render
 
 **Table structure:** Two header rows. The first row has empty cells under Name (ID), Risk Score, and Relationship, and a single spanning header **Risk Events** over the three match columns. The second row contains all six column labels.
 
@@ -478,10 +422,11 @@ After the column assignment block, render the results table.
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
 - **Risk Score** — `{riskLevel}` (`{riskScore}`) from Step 7b. If riskScore = 0, display `-` with no score value or icon.
 - **Relationship** — `Client` for the client row; relationship label for all others
-- **Strong Matches** — all hits where `weight = fullWeight`
-- **Moderate Matches** — all hits where `weight = partialWeight`
-- **Weak Matches** — all hits where `weight = noWeight`
+- **Strong Match** — all hits where `weight = fullWeight`
+- **Moderate Match** — all hits where `weight = partialWeight`
+- **Weak Match** — all hits where `weight = noWeight`
 
+Per cell:
 1. **Bold summary line** — deduplicated event codes across all hits assigned to that column only
 2. One blank line
 3. Indented italic hit counts, with no blank line between them but one blank line separating them from the summary line above:
@@ -490,6 +435,7 @@ After the column assignment block, render the results table.
 
    &nbsp;&nbsp;*{n} Auto-Matched Hits*
    &nbsp;&nbsp;*{n} Matched Hits*
+
    Omit a line if its count is 0.
 4. Render `—` when no hits of that weight exist for that party
 
@@ -504,11 +450,13 @@ After the column assignment block, render the results table.
 | 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{fullWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{partialWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{noWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* |
 | 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | — | **{partialWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | — |
 
+If the user asks for a score breakdown for any party, render Appendix J for that party.
+
 **GO TO** Step 9
 
 ---
 
-#### ▶️ **Step 9: Complete or Rerun**
+### Step 9: Complete or Rerun
 
 | Field | Value |
 |---|---|
@@ -532,64 +480,58 @@ WAIT for user input:
 - If user selects **A** → **GO TO** Step COMPLETE
 - If user selects **B** → **GO TO** Step 6
 
-#### ▶️ **Step COMPLETE**
+---
 
-> | Field | Value |
-> |---|---|
-> | **Type** | Processing → Display |
-> | **Status Message** | 💾 Saving AML/KYC results to party profiles... |
-> | **Notification Rule** | Status message only during processing. Return results display only. No commentary or narration. |
+### Step COMPLETE
+
+| Field | Value |
+|---|---|
+| **Type** | Processing → Display |
+| **Status Message** | 💾 Updating party profiles with AML/KYC results... |
+| **Notification Rule** | Status message only during processing. Return results display only. No commentary or narration. |
 
 For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
 
 - Call `intapp:get_party` with `partyId` to retrieve existing `_moodyAgentRuns` rows
 
-- **Unwrap the response** before accessing fields. The tool result is returned as a
-  content block, not a plain object. Always unwrap as follows:
+- **Unwrap the response** before accessing fields. The tool result is returned as a content block, not a plain object. Always unwrap as follows:
 
 ```
-  result = tool response
-  if result is an array        → result = result[0]
-  if result has key "text"     → result = JSON.parse(result.text)
-  if result is an array        → result = result[0]
-  xml = result._moodyAgentRuns ?? ""
+result = tool response
+if result is an array        → result = result[0]
+if result has key "text"     → result = JSON.parse(result.text)
+if result is an array        → result = result[0]
+xml = result._moodyAgentRuns ?? ""
 ```
 
-- **Parse** the `_moodyAgentRuns` XML string back into `TableCellData` rows using
-  the pattern defined in Appendix. If `xml` is absent,
-  null, or empty string, treat as an empty rows array.
+- **Parse** the `_moodyAgentRuns` XML string back into `TableCellData` rows using the pattern defined in Appendix K. If `xml` is absent, null, or empty string, treat as an empty rows array.
 
 - **Before patching**, output one line per party:
 
 ```
-  {partyName} ({partyId}): {n} existing rows — appending 1 → {n+1} total
+{partyName} ({partyId}): {n} existing rows — appending 1 → {n+1} total
 ```
 
-  If existing rows = 0 for a party that has appeared in a prior run, stop and
-  re-fetch before proceeding.
+  If existing rows = 0 for a party that has appeared in a prior run, stop and re-fetch before proceeding.
 
-- **Build the new row** from `{moodysHitEvents}[i]` where `{moodysHitEvents}[i].partyId`
-  matches the current party — using the following field mappings:
+- **Build the new row** from `{moodysHitEvents}[i]` where `{moodysHitEvents}[i].partyId` matches the current party — using the following field mappings:
 
-  | Column | Source |
-  |---|---|
-  | `dateComplete` | `{ "dateValue": "<today date and time ISO 8601, e.g. 2026-04-15T18:50:44Z>" }` |
-  | `reqID` | `{ "stringValue": "{reqID}" }` |
-  | `riskScore` | `{ "stringValue": "{moodysHitEvents}[i].riskLevel ({moodysHitEvents}[i].riskScore)" }` — use `"None"` if `riskScore` = 0 or null |
-  | `riskEvents` | `{ "stringValue": "comma-separated deduplicated codes across {moodysHitEvents}[i].summary.fullWeightEvents + {moodysHitEvents}[i].summary.partialWeightEvents, or 'None'" }` |
-  | `confirmedRiskEvents` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].eventCodes where hits[].confirmed = true, or 'None'" }` |
-  | `confirmedRiskId` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].gridId where hits[].confirmed = true, or ''" }` |
-  | `strongRiskEvents` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].eventCodes where hits[].weight = 'fullWeight', or 'None'" }` |
-  | `strongRiskId` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].gridId where hits[].weight = 'fullWeight', or ''" }` |
-  | `modRiskEvents` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].eventCodes where hits[].weight = 'partialWeight', or 'None'" }` |
-  | `modRiskId` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].gridId where hits[].weight = 'partialWeight', or ''" }` |
-  | `ranForClient` | `{ "stringValue": "{clientPartyName} ({clientPartyId})" }` — same value for every party in this loop |
-  | `relationship` | `{ "stringValue": "Parent" }` the same relationship label(s) displayed in the **Name (ID)** and **Relationship** columns for this party in the Step 8 results table — comma-separated. Use "Client" if it is the client party |
+| Column | Source |
+|---|---|
+| `dateComplete` | `{ "dateValue": "<today date and time ISO 8601, e.g. 2026-04-15T18:50:44Z>" }` |
+| `reqID` | `{ "stringValue": "{reqID}" }` |
+| `riskScore` | `{ "stringValue": "{moodysHitEvents}[i].riskLevel ({moodysHitEvents}[i].riskScore)" }` — use `"None"` if `riskScore` = 0 or null |
+| `riskEvents` | `{ "stringValue": "comma-separated deduplicated codes across fullWeightEvents + partialWeightEvents, or 'None'" }` |
+| `confirmedRiskEvents` | `{ "stringValue": "comma-separated eventCodes where hits[].confirmed = true, or 'None'" }` |
+| `confirmedRiskId` | `{ "stringValue": "comma-separated gridIds where hits[].confirmed = true, or ''" }` |
+| `strongRiskEvents` | `{ "stringValue": "comma-separated eventCodes where hits[].weight = 'fullWeight', or 'None'" }` |
+| `strongRiskId` | `{ "stringValue": "comma-separated gridIds where hits[].weight = 'fullWeight', or ''" }` |
+| `modRiskEvents` | `{ "stringValue": "comma-separated eventCodes where hits[].weight = 'partialWeight', or 'None'" }` |
+| `modRiskId` | `{ "stringValue": "comma-separated gridIds where hits[].weight = 'partialWeight', or ''" }` |
+| `ranForClient` | `{ "stringValue": "{clientPartyName} ({clientPartyId})" }` — same value for every party in this loop |
+| `relationship` | `{ "stringValue": "relationship label(s) for this party, comma-separated. 'Client' if client party" }` |
 
-- Call `intapp:update_party` with `partyId` and
-  `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`.
-  Expect `204 No Content` on success. On failure, note the error and continue
-  to next party — do not abort.
+- Call `intapp:update_party` with `partyId` and `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`. Expect `204 No Content` on success. On failure, note the error and continue to next party — do not abort.
 
 - Track result per party: `{ partyId, partyName, success: true/false, error?: "..." }`
 
@@ -610,28 +552,30 @@ Playbook completed.
 
 ---
 
-#### ▶️ **Step END**
+### Step END
 
-> | Field | Value |
-> |---|---|
-> | **Type** | Display |
-> | **Status Message** | *(none)* |
-> | **Notification Rule** | Return results only |
+| Field | Value |
+|---|---|
+| **Type** | Display |
+| **Status Message** | *(none)* |
+| **Notification Rule** | Return results only |
 
 Playbook ended but not completed.
 
 ---
 
-### Appendix
+## Appendices
 
-#### A. Display Preferences
+### Appendix A: Display Preferences
 - **Risk Scores:** 🔴 High, 🟠 Medium, 🔘 Low, None
   - None if risk score is 0
 - **Client Indicator:** 🔷 next to client name
 - **Related Party Indicator:** 🔹 next to party name
 - **New Party Indicator:** 🆕 before 🔹 when `isNew` = `true`
 
-#### B. Party-Level Risk Score Calculation
+---
+
+### Appendix B: Party-Level Risk Score Calculation
 
 Evaluate in order, stop at first match:
 
@@ -652,9 +596,11 @@ Evaluate in order, stop at first match:
 | 🔘 Low | 1 – 39 |
 | None | 0 |
 
-`noWeight.riskEvents` do not contribute to score.
+`noWeight` event codes do not contribute to score.
 
-#### C. Overall Risk Score Calculation
+---
+
+### Appendix C: Overall Risk Score Calculation
 
 Start with the client party's `riskScore` as the baseline. Then for each related party, add a contribution based on their `riskLevel`:
 
@@ -674,9 +620,11 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 | 🔘 Low | 1 – 33 |
 | None | 0 |
 
-#### D. `intapp:create_request` API Details
+---
 
-##### API Body
+### Appendix D: `intapp:create_request` API Details
+
+#### API Body
 ```json
 {
   "workflowDefinitionName": "AML/KYC - Moody's GRID",
@@ -702,8 +650,10 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 }
 ```
 
-##### Grid Question XML
+#### Grid Question XML
+
 *(one `<GridRow>` per entry across all `partiesList[]` buckets in `{relatedParties}`, deduplicated by `partyId`, with `<RowId>` incrementing from 0)*
+
 ```xml
 <Grid>
   <GridRow>
@@ -737,9 +687,12 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 </Grid>
 ```
 
-#### E. `intapp:create_conflicts_search` API Details
+---
 
-##### API Body
+### Appendix E: `intapp:create_conflicts_search` API Details
+
+#### API Body
+
 *(one entry per unique party across all `partiesList[]` buckets in `{relatedParties}`, plus the client as first entry)*
 - Client entry: `{ "affiliationType": "{clientPartyConAff}", "name": "{clientPartyName}", "partyId": "{clientPartyId}" }`
 - Related party entries: `{ "affiliationType": "{relPartyConAff}", "name": "{partyName}", "partyId": "{partyId}" }` — deduplicated by `partyId`
@@ -755,20 +708,18 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
   ]
 }
 ```
-### Appendix F. Multi-Source Relationship Rule
 
-Relationship buckets are **non-exclusive** — a single entity can and should be recorded
-in multiple buckets simultaneously. Evaluate all bucket conditions for every entity
-regardless of source; do not stop at the first match.
+---
 
-**Example:** The GUO is always also a Parent. If it additionally appears in the
-shareholders list, it holds three relationships at once: `["GUO", "Parent", "Shareholder"]`.
-It appears as a single row in `{relatedPartiesTable[]}` with all three labels — never
-as duplicate rows, and never counted more than once toward any bucket's `total`.
+### Appendix F: Multi-Source Relationship Rule
 
-### Appendix G. intapp:get_corp_structure_party_relationships tool relatedParties Schema
+Relationship buckets are **non-exclusive** — a single entity can and should be recorded in multiple buckets simultaneously. Evaluate all bucket conditions for every entity regardless of source; do not stop at the first match.
 
-\`\`\`json
+**Example:** The GUO is always also a Parent. If it additionally appears in the shareholders list, it holds three relationships at once: `["GUO", "Parent", "Shareholder"]`. It appears as a single row in `{relatedPartiesTable[]}` with all three labels — never as duplicate rows, and never counted more than once toward any bucket's `total`.
+
+#### `intapp:get_corp_structure_party_relationships` tool relatedParties Schema
+
+```json
 {
   "clientExternalId": "",
   "providerType": "",
@@ -782,14 +733,14 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
     "UBO":                { "total": 0, "parties": 0, "partiesList": [], "nonPartiesList": [] }
   }
 }
-\`\`\`
+```
 
 - `partiesList[]` entries: `{ "partyId": "", "partyName": "", "externalId": "" }`
 - `nonPartiesList[]` entries: `{ "externalId": "", "name": "" }`
 
 ---
 
-### Appendix G. `get_conflicts_search` Response Guide (`properties=resultsPlusMoodysGRID`)
+### Appendix G: `get_conflicts_search` Response Guide (`properties=resultsPlusMoodysGRID`)
 
 #### Key Fields
 
@@ -834,14 +785,14 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 }
 ```
 
-### Notes
+#### Notes
 - Non-Moody's hits are returned as-is with no `moodysGRID` field
 - If enrichment fails for a hit, `moodysGRID` will be `null` and `moodysError` will describe the failure
 - Enrichment is capped at **25 Moody's hits** per call, processed in batches of 5
 
-### Appendix H. Risk Label & Event
+---
 
-# Moody's GRID Risk Event Code Reference
+### Appendix H: Risk Label & Event Code Reference
 
 | Code | Label |
 |---|---|
@@ -900,15 +851,17 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 | VCY | Virtual Currency |
 | WLT | Watchlisted Entities |
 
-### Appendix I. Party Risk Score Reasoning
+---
+
+### Appendix I: Party Risk Score Reasoning
 
 *Displayed only when explicitly requested. Provides a per-hit breakdown of every event code contribution that produced a party's final score.*
 
 ---
 
-### Appendix J Risk Score Reasoning
+### Appendix J: Risk Score Reasoning Table
 
-## {partyName} (`{partyId}`) — Score: {riskScore} {riskLevel}
+**{partyName} (`{partyId}`) — Score: {riskScore} {riskLevel}**
 
 | Moody's GRID Hit | Name Match Score | Match Type | Risk Events (Risk Score Contribution) | Total Contribution to Risk Score |
 |---|---|---|---|---|
@@ -917,15 +870,15 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 
 **Total: {riskScore} {riskLevel}**
 
-### Appendix K Patching `_moodyAgentRuns` on a Party (Intapp API)
+---
+
+### Appendix K: Patching `_moodyAgentRuns` on a Party
 
 `_moodyAgentRuns` is a DataTable custom field on the Party entity. The PATCH endpoint replaces the entire table — appending requires a read-modify-write: GET existing rows, parse XML, append new row, PATCH full array.
 
 **Endpoint:** `PATCH /api/common/v1/parties/{partyId}` → `204 No Content`
 
----
-
-## Column Definitions
+#### Column Definitions
 
 | Key | Display Name | Type |
 |---|---|---|
@@ -944,9 +897,7 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 
 > `ranForClient` and `relationship` must be added to the table schema in the Intapp form designer before they can be written via the API.
 
----
-
-## Rules
+#### Rules
 
 - Each cell must be a **typed object**: `{ "stringValue": "..." }` or `{ "dateValue": "..." }` — plain strings cause `400`
 - GET response returns `_moodyAgentRuns` as raw XML — parse back to `TableCellData` before re-patching
