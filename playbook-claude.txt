@@ -552,22 +552,48 @@ For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
 
 - Call `intapp:get_party` with `partyId` to retrieve existing `_moodyAgentRuns` rows
 
-- **Parse** the `_moodyAgentRuns` XML string back into `TableCellData` rows using the pattern defined in `patching-moodyAgentRuns.md` Step 2. If `_moodyAgentRuns` is absent or empty, treat as an empty rows array.
+- **Unwrap the response** before accessing fields. The tool result is returned as a
+  content block, not a plain object. Always unwrap as follows:
 
-- **Build the new row** from `{moodysHitEvents}[]` for this party:
+```
+  result = tool response
+  if result is an array        → result = result[0]
+  if result has key "text"     → result = JSON.parse(result.text)
+  if result is an array        → result = result[0]
+  xml = result._moodyAgentRuns ?? ""
+```
 
-  | Column | Value |
+- **Parse** the `_moodyAgentRuns` XML string back into `TableCellData` rows using
+  the pattern defined in `patching-moodyAgentRuns.md` Step 2. If `xml` is absent,
+  null, or empty string, treat as an empty rows array.
+
+- **Before patching**, output one line per party:
+
+```
+  {partyName} ({partyId}): {n} existing rows — appending 1 → {n+1} total
+```
+
+  If existing rows = 0 for a party that has appeared in a prior run, stop and
+  re-fetch before proceeding.
+
+- **Build the new row** from `{moodysHitEvents}[i]` where `{moodysHitEvents}[i].partyId`
+  matches the current party — using the following field mappings:
+
+  | Column | Source |
   |---|---|
   | `dateComplete` | `{ "dateValue": "<today ISO 8601>" }` |
   | `reqID` | `{ "stringValue": "{reqID}" }` |
-  | `riskScore` | `{ "stringValue": "{riskLevel} ({riskScore})" }` — e.g. `"Low (3)"`. Use `"None"` if riskScore = 0 |
-  | `riskEvents` | `{ "stringValue": "<comma-separated deduplicated event codes across all fullWeight + partialWeight hits for this party, or 'None'>" }` |
-  | `confirmedRiskEvents` | `{ "stringValue": "<comma-separated event codes from hits where confirmed = true, or 'None'>" }` |
-  | `confirmedRiskId` | `{ "stringValue": "<comma-separated gridIds where confirmed = true, or ''>" }` |
-  | `strongRiskEvents` | `{ "stringValue": "<comma-separated event codes from fullWeight hits, or 'None'>" }` |
-  | `strongRiskId` | `{ "stringValue": "<comma-separated gridIds from fullWeight hits, or ''>" }` |
+  | `riskScore` | `{ "stringValue": "{moodysHitEvents}[i].riskLevel ({moodysHitEvents}[i].riskScore)" }` — use `"None"` if `riskScore` = 0 or null |
+  | `riskEvents` | `{ "stringValue": "comma-separated deduplicated codes across {moodysHitEvents}[i].summary.fullWeightEvents + {moodysHitEvents}[i].summary.partialWeightEvents, or 'None'" }` |
+  | `confirmedRiskEvents` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].eventCodes where hits[].confirmed = true, or 'None'" }` |
+  | `confirmedRiskId` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].gridId where hits[].confirmed = true, or ''" }` |
+  | `strongRiskEvents` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].eventCodes where hits[].weight = 'fullWeight', or 'None'" }` |
+  | `strongRiskId` | `{ "stringValue": "comma-separated {moodysHitEvents}[i].hits[].gridId where hits[].weight = 'fullWeight', or ''" }` |
 
-- Call `intapp:update_party` with `partyId` and `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`. Expect `204 No Content` on success. On failure, note the error and continue to next party — do not abort.
+- Call `intapp:update_party` with `partyId` and
+  `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`.
+  Expect `204 No Content` on success. On failure, note the error and continue
+  to next party — do not abort.
 
 - Track result per party: `{ partyId, partyName, success: true/false, error?: "..." }`
 
