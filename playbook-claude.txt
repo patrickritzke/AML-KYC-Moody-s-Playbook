@@ -773,42 +773,81 @@ as duplicate rows, and never counted more than once toward any bucket's `total`.
 - If enrichment fails for a hit, `moodysGRID` will be `null` and `moodysError` will describe the failure
 - Enrichment is capped at **25 Moody's hits** per call, processed in batches of 5
 
-### Appendix H. Party Risk Score Reasoning
+### Appendix H. Risk Label & Event
+
+# Moody's GRID Risk Event Code Reference
+
+| Code | Label |
+|---|---|
+| ABU | Abuse (Domestic, Elder, Child) |
+| ARS | Arson |
+| AST | Assault, Battery |
+| BLK | Firm Specific Blocked List |
+| BRB | Bribery, Graft, Kickbacks, Political Corruption |
+| BUR | Burglary |
+| BUS | Business Crimes (Antitrust, Bankruptcy, Price Fixing) |
+| CFT | Counterfeiting, Forgery |
+| CON | Conspiracy (no specific crime named) |
+| CPR | Copyright Infringement (Intellectual Property, Electronic Piracy) |
+| CYB | Computer Related, Cyber Crime |
+| DEN | Denied Entity |
+| DPS | Possession of Drugs or Drug Paraphernalia |
+| DTF | Trafficking or Distribution of Drug |
+| ENV | Environmental Crimes (Poaching, Illegal Logging, Animal Cruelty) |
+| FOF | Former OFAC List |
+| FOR | Forfeiture |
+| FOS | Former Sanctions |
+| FRD | Fraud, Scams, Swindles |
+| FUG | Fugitive, Escape |
+| GAM | Illegal Gambling |
+| HUM | Human Rights, Genocide, War Crimes |
+| IGN | Possession or Sale of Guns, Weapons and Explosives |
+| IMP | Identity Theft, Impersonation |
+| IPR | Illegal Prostitution |
+| IRC | Iran Connect |
+| KID | Kidnapping, Abduction, Held Against Will |
+| LMD | Legal Marijuana Dispensaries |
+| LNS | Loan Sharking, Usury, Predatory Lending |
+| MIS | Misconduct |
+| MLA | Money Laundering |
+| MOR | Mortgage Related |
+| MSB | Money Services Business |
+| MUR | Murder, Manslaughter (Committed, Planned or Attempted) |
+| NSC | Nonspecific Crime |
+| OBS | Obscenity Related, Child Pornography |
+| ORG | Organized Crime, Criminal Association, Racketeering |
+| PEP | Politically Exposed Person |
+| PRJ | Perjury, Obstruction of Justice, False Filings, False Statements |
+| PSP | Possession of Stolen Property |
+| REG | Regulatory Action |
+| RES | Real Estate Actions |
+| ROB | Robbery (Stealing by Threat, Use of Force) |
+| SEC | SEC Violations (Insider Trading, Securities Fraud) |
+| SEX | Sex Offenses (Rape, Sodomy, Sexual Abuse, Pedophilia) |
+| SMG | Smuggling (Does not include Drugs, Money, People or Guns) |
+| SNX | Sanctions Connect |
+| SPY | Spying (Treason, Espionage) |
+| TAX | Tax Related Offenses |
+| TER | Terrorist Related |
+| TFT | Theft (Larceny, Misappropriation, Embezzlement, Extortion) |
+| TRF | People Trafficking, Organ Trafficking |
+| VCY | Virtual Currency |
+| WLT | Watchlisted Entities |
+
+### Appendix I. Party Risk Score Reasoning
 
 *Displayed only when explicitly requested. Provides a per-hit breakdown of every event code contribution that produced a party's final score.*
 
 ---
 
-**Format**
-{partyName} ({partyId}) — Score: {score} {riskLevel}
-Full Weight
-{Hit Name} ({resultId}) — Auto Match {matchScore}%
-• {CODE}   → 100  [Rule 1 — Critical, score ceiling reached]
-{Hit Name} ({resultId}) — Auto Match {matchScore}%
-• {CODE}   +{value}
-• {CODE}   +{value}
-{Hit Name} ({resultId}) — Confirmed Match
-• {CODE}   +{value}
-• {CODE}   +{value}
-Partial Weight
-{Hit Name} ({resultId}) — Auto Match {matchScore}%
-• {CODE}   +{value}
-• {CODE}   +{value}
-No Weight
-{Hit Name} ({resultId}) — Confirmed No Match
-• {CODE}   (not scored)
-• {CODE}   (not scored)
-Total: {score}  {riskLevel}
+# Risk Score Reasoning
 
----
+## {partyName} (`{partyId}`) — Score: {riskScore} {riskLevel}
 
-**Rules:**
-- Auto Match hits show the computed token overlap percentage, e.g. `67%`
-- Confirmed Match and Confirmed No Match hits were manually resolved — no percentage is shown
-- If Rule 1 fired, the Critical fullWeight code that triggered it is marked `→ 100`
-  and no further contributions are listed — the score is 100 regardless of remaining hits
-- Every event code in every hit is listed individually — the same code appearing
-  across multiple hits contributes each time
-- Partial weight values are 50% of the full value, rounded down per code (e.g. `+2.5` is valid)
-- noWeight hits are listed for transparency but marked `(not scored)`
-- The Total line reflects the final score, capped at 100
+| Moody's GRID Hit | Name Match Score | Match Type | Risk Events (Risk Score Contribution) | Total Contribution to Risk Score |
+|---|---|---|---|---|
+| {gridName} (`{resultId}`) | {matchScore}% | Strong / Moderate / Weak | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
+| {gridName} (`{resultId}`) | {matchScore}% | Strong / Moderate / Weak | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +0 | +{total} |
+
+**Total: {riskScore} {riskLevel}**
+
