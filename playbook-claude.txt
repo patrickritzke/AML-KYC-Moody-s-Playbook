@@ -540,6 +540,50 @@ WAIT for user input:
 > | **Status Message** | *(none)* |
 > | **Notification Rule** | Return results only |
 
+#### ▶️ **Step COMPLETE**
+
+> | Field | Value |
+> |---|---|
+> | **Type** | Processing → Display |
+> | **Status Message** | 💾 Saving AML/KYC results to party profiles... |
+> | **Notification Rule** | Status message only during processing. Return results display only. No commentary or narration. |
+
+For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
+
+- Call `intapp:get_party` with `partyId` to retrieve existing `_moodyAgentRuns` rows
+
+- **Parse** the `_moodyAgentRuns` XML string back into `TableCellData` rows using the pattern defined in `patching-moodyAgentRuns.md` Step 2. If `_moodyAgentRuns` is absent or empty, treat as an empty rows array.
+
+- **Build the new row** from `{moodysHitEvents}[]` for this party:
+
+  | Column | Value |
+  |---|---|
+  | `dateComplete` | `{ "dateValue": "<today ISO 8601>" }` |
+  | `reqID` | `{ "stringValue": "{reqID}" }` |
+  | `riskScore` | `{ "stringValue": "{riskLevel} ({riskScore})" }` — e.g. `"Low (3)"`. Use `"None"` if riskScore = 0 |
+  | `riskEvents` | `{ "stringValue": "<comma-separated deduplicated event codes across all fullWeight + partialWeight hits for this party, or 'None'>" }` |
+  | `confirmedRiskEvents` | `{ "stringValue": "<comma-separated event codes from hits where confirmed = true, or 'None'>" }` |
+  | `confirmedRiskId` | `{ "stringValue": "<comma-separated gridIds where confirmed = true, or ''>" }` |
+  | `strongRiskEvents` | `{ "stringValue": "<comma-separated event codes from fullWeight hits, or 'None'>" }` |
+  | `strongRiskId` | `{ "stringValue": "<comma-separated gridIds from fullWeight hits, or ''>" }` |
+
+- Call `intapp:update_party` with `partyId` and `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`. Expect `204 No Content` on success. On failure, note the error and continue to next party — do not abort.
+
+- Track result per party: `{ partyId, partyName, success: true/false, error?: "..." }`
+
+After all patches complete, display:
+
+---
+
+**✅ AML/KYC Complete — `{clientPartyName}` (`{clientPartyId}`)**
+
+| Party | Status |
+|---|---|
+| 🔷 `{clientPartyName}` (`{clientPartyId}`) | ✅ Saved / ❌ `{error}` |
+| 🔹 `{partyName}` (`{partyId}`) | ✅ Saved / ❌ `{error}` |
+
+---
+
 Playbook completed.
 
 ---
