@@ -530,7 +530,9 @@ xml = result._moodyAgentRuns ?? ""
 | `ranForClient` | `{ "stringValue": "{clientPartyName} ({clientPartyId})" }` — same value for every party in this loop |
 | `relationship` | `{ "stringValue": "relationship label(s) for this party, comma-separated. 'Client' if client party" }` |
 
-- Call `intapp:update_party` with `partyId` and `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`. Expect `204 No Content` on success. On failure, note the error and continue to next party — do not abort.
+- Call `intapp:update_party` with `partyId` and the appropriate body. Expect `204 No Content` on success. On failure, note the error and continue to next party — do not abort.
+  - If `partyId` = `{clientPartyId}`: `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] }, "_moodyAgentNext": "<6 months from today at midnight UTC, e.g. 2026-10-15T00:00:00Z>" }`
+  - All other parties: `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`
 
 - Track result per party: `{ partyId, partyName, success: true/false, error?: "..." }`
 
@@ -542,8 +544,8 @@ After all patches complete, display:
 
 | Party | Status |
 |---|---|
-| 🔷 `{clientPartyName}` (`{clientPartyId}`) | ✅ Saved / ❌ `{error}` |
-| 🔹 `{partyName}` (`{partyId}`) | ✅ Saved / ❌ `{error}` |
+| 🔷 `{clientPartyName}` (`{clientPartyId}`) | ✅ Saved Risk Score - Next Review Scheduled in 6 months `{nextReviewDate}` / ❌ `{error}` |
+| 🔹 `{partyName}` (`{partyId}`) | ✅ Saved Risk Score / ❌ `{error}` |
 
 ---
 
