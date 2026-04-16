@@ -146,7 +146,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - If found:
   - Set `{clientPartyId}`, `{clientPartyName}`, `{clientPartyExternalId}`, `{clientPartyExternalIdProvider}`
   - **GO TO** Step 2
-- If not found → **GO TO** Step 1b
+- If not found or no party was input → **GO TO** Step 1b
 
 #### Step 1b: Suggest Party
 
