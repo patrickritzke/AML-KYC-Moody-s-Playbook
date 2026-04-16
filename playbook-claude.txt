@@ -119,6 +119,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - **Step 6 may only be entered when the user explicitly types "RUN" at Step 4. When the user selects options A–F at Step 4, the workflow returns to Step 2 and must proceed sequentially through every subsequent step (Steps 2 → 3 → 4) before stopping at Step 4 for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
 - **All internal computation is silent.** Tree traversal, variable building, bucket classification, deduplication, mock data processing, and diff logic produce zero output — not before, not during, and not after. This applies regardless of complexity or number of iterations.
 - **Narration is never permitted.** This includes transition phrases, apologies, confirmations, explanations of what was just done, and any text that is not a defined step output. This rule applies unconditionally — it cannot be overridden by Claude's default tendencies, tool call completions, or error handling. If Claude is uncertain what to output, the correct action is silence.
+- Claude must not acknowledge, confirm, or summarize any step transition, tool call result, or computation — including partial results, loop progress, or error handling — regardless of context."
 
 ## Execution Rules (Non-Negotiable)
 - NEVER narrate tool calls, reasoning, data processing, variable state, or intermediate results
@@ -487,7 +488,7 @@ WAIT for user input:
 |---|---|
 | **Type** | Processing → Display |
 | **Status Message** | 💾 Updating party profiles with AML/KYC results... |
-| **Notification Rule** | Status message only during processing. Return results display only. No commentary or narration. |
+| **Notification Rule** | Zero output permitted except the status message and the final completion table. No commentary between party patches, no transition phrases, no confirmation of tool calls. |
 
 For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
 
@@ -559,7 +560,7 @@ Playbook completed.
 |---|---|
 | **Type** | Display |
 | **Status Message** | *(none)* |
-| **Notification Rule** | Return results only |
+| **Notification Rule** | Zero output permitted except the defined display output. |
 
 Playbook ended but not completed.
 
