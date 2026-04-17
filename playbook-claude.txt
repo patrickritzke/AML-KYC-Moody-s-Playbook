@@ -206,13 +206,10 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 - Bucket: `{relatedParties.Parent}`
 - Tree: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
-- If already complete or 0 available → **GO TO** Step 3b
 
-Display:
-🔷 Client
-✅ {N} Parents included in screening
-❌ {N} Parents not included in screening
+DISPLAY structure:
 
+**Corporate Tree Parents**
 ```
 ✅ / ❌  {topmost ancestor name} ({externalId})
    ✅ / ❌  {next ancestor name} ({externalId})
@@ -220,14 +217,26 @@ Display:
          🔷 {clientPartyName} ({clientPartyId})
 ```
 
-*{N} of {total} parents are already included. Add the remaining {total−parties}?*
+DISPLAY summary for client, parties, and non-parties (only show each if they exist in the Structure:
 
-- Type `ADD` to add all remaining Parents to screening
+🔷 Client
+✅ {N} Parents included in screening --> Only show if 
+❌ {N} Parents not included in screening --> 
+
+PROMPT user to add or skip if there are non-parties available to add:
+
+- Type `ADD` to add all Corporate Tree Parents to screening
 - Type `SKIP` to move on
 
 WAIT for user input:
 - `ADD` → create all entries in `{relatedParties.Parent.nonPartiesList}` via `intapp:create_party` → **GO TO** Step 3b
 - `SKIP` → **GO TO** Step 3b
+
+DISPLAY brief message if there are no non-parties available to add:
+
+All available Corporate Tree Parents already included in screening
+
+**GO TO** Step 3b
 
 ---
 
