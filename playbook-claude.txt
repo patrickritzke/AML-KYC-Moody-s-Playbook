@@ -253,7 +253,7 @@ All available Corporate Tree Parents are included in screening.
 
 - 'ACTION':
     -WAIT for user input:
-      - `ADD` → 
+      - `ADD` 
         - create all entries in `{relatedParties.Parent.nonPartiesList}` via `intapp:create_party`
         - **GO TO** Step 3b
       - `SKIP`
@@ -269,30 +269,61 @@ All available Corporate Tree Parents are included in screening.
 | **Status Message** | None. |
 | **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
 
-- Bucket: `{relatedParties.Subsidiary}`
-- Tree: render the client node at the root, with all immediate subsidiaries as direct children one level below. No further nesting — immediate subsidiaries only.
-- If already complete or 0 available → **GO TO** Step 3c
+---
 
-Display:
-🔷 Client
-✅ {N} Subsidiaries included in screening
-❌ {N} Subsidiaries not included in screening
+**IF** `{relatedParties.Subsidiary.total}` = 0:
 
+- `DISPLAY`:
+
+No Corporate Tree Subsidiaries found
+
+- `ACTION`: GO TO Step 3c
+
+---
+
+**IF** `{relatedParties.Subsidiary.total}` > 0 AND `{relatedParties.Subsidiary.nonPartiesList.length}` = 0:
+
+- `DISPLAY`: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
+
+**Corporate Tree Subsidiaries**
+```
+🔷 {clientPartyName} ({clientPartyId})
+   ✅  {subsidiaryName} ({externalId})
+   ✅  {subsidiaryName} ({externalId})
+    ...
+```
+
+All available Corporate Tree Subsidiaries are included in screening.
+
+- `ACTION`: GO TO Step 3c
+
+---
+
+**IF** `{relatedParties.Subsidiary.total}` > 0 AND `{relatedParties.Subsidiary.nonPartiesList.length}` > 0:
+
+- `DISPLAY`: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
+
+**Corporate Tree Subsidiaries**
 ```
 🔷 {clientPartyName} ({clientPartyId})
    ✅ / ❌  {subsidiaryName} ({externalId})
    ✅ / ❌  {subsidiaryName} ({externalId})
-   ...
+    ...
 ```
+🔷 Client
+✅ {N} Subsidiaries included in screening
+❌ {N} Subsidiaries not included in screening
 
-*{N} of {total} subsidiaries are already included. Add the remaining {total−parties}?*
+- `PROMPT`:
+  - Type `ADD` to add all remaining Subsidiaries to screening
+  - Type `SKIP` to move on
 
-- Type `ADD` to add all remaining Subsidiaries to screening
-- Type `SKIP` to move on
-
-WAIT for user input:
-- `ADD` → create all entries in `{relatedParties.Subsidiary.nonPartiesList}` via `intapp:create_party` → **GO TO** Step 3c
-- `SKIP` → **GO TO** Step 3c
+- `ACTION`: WAIT for user input:
+  - `ADD`
+    - create all entries in `{relatedParties.Subsidiary.nonPartiesList}` via `intapp:create_party`
+    - **GO TO** Step 3c
+  - `SKIP`
+    - **GO TO** Step 3c
 
 ---
 
@@ -304,30 +335,60 @@ WAIT for user input:
 | **Status Message** | None. |
 | **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
 
-- Bucket: `{relatedParties["Management/Board"]}`
-- Tree: render the client node at the root, with all board members as direct children. Include title where available.
-- If already complete or 0 available → **GO TO** Step 3d
+---
 
-Display:
-🔷 Client
-✅ {N} Board Members included in screening
-❌ {N} Board Members not included in screening
+**IF** `{relatedParties["Management/Board"].total}` = 0:
 
+- `DISPLAY`:
+
+No Management & Board Members found
+
+- `ACTION`: GO TO Step 3d
+
+---
+
+**IF** `{relatedParties["Management/Board"].total}` > 0 AND `{relatedParties["Management/Board"].nonPartiesList.length}` = 0:
+
+- `DISPLAY`: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
+
+**Management & Board**
+```
+🔷 {clientPartyName} ({clientPartyId})
+   ✅  {name} — {title}
+   ✅  {name} — {title}
+   ...
+```
+All available Management & Board Members are included in screening.
+
+- `ACTION`: GO TO Step 3d
+
+---
+
+**IF** `{relatedParties["Management/Board"].total}` > 0 AND `{relatedParties["Management/Board"].nonPartiesList.length}` > 0:
+
+- `DISPLAY`: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
+
+**Management & Board**
 ```
 🔷 {clientPartyName} ({clientPartyId})
    ✅ / ❌  {name} — {title}
    ✅ / ❌  {name} — {title}
    ...
 ```
+🔷 Client
+✅ {N} Board Members included in screening
+❌ {N} Board Members not included in screening
 
-*{N} of {total} board members are already included. Add the remaining {total−parties}?*
+- `PROMPT`:
+  - Type `ADD` to add all remaining Board Members to screening
+  - Type `SKIP` to move on
 
-- Type `ADD` to add all remaining Board Members to screening
-- Type `SKIP` to move on
-
-WAIT for user input:
-- `ADD` → create all entries in `{relatedParties["Management/Board"].nonPartiesList}` via `intapp:create_party` → **GO TO** Step 3d
-- `SKIP` → **GO TO** Step 3d
+- `ACTION`: WAIT for user input:
+  - `ADD`
+    - create all entries in `{relatedParties["Management/Board"].nonPartiesList}` via `intapp:create_party`
+    - **GO TO** Step 3d
+  - `SKIP`
+    - **GO TO** Step 3d
 
 ---
 
@@ -339,14 +400,37 @@ WAIT for user input:
 | **Status Message** | None. |
 | **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
 
-- Bucket: `{relatedParties.UBO}`
-- Tree: render the full recursive UBO chain. ✅ party nodes are shown in their correct hierarchical position. Where total entities exceed 50, apply the large section rule — collapse contiguous non-party blocks into summary lines.
-- If already complete or 0 available → **GO TO** Step 3e
+---
 
-Display:
-🔷 Client
-✅ {N} UBOs included in screening
-❌ {N} UBOs not included in screening
+**IF** `{relatedParties.UBO.total}` = 0:
+
+- `DISPLAY`: "No Beneficial Owners found"
+- `ACTION`: GO TO Step 3e
+
+---
+
+**IF** `{relatedParties.UBO.total}` > 0 AND `{relatedParties.UBO.nonPartiesList.length}` = 0:
+
+- `DISPLAY`: render the full recursive UBO chain from the client node down. Each level is indented one step further than its parent.
+
+**Beneficial Owners**
+```
+🔷 {clientPartyName} ({clientPartyId})
+   ✅  {name} ({externalId})
+      ✅  {name} ({externalId})
+         ...
+```
+All available Beneficial Owners are included in screening.
+
+- `ACTION`: GO TO Step 3e
+
+---
+
+**IF** `{relatedParties.UBO.total}` > 0 AND `{relatedParties.UBO.nonPartiesList.length}` > 0:
+
+- `DISPLAY`: render the full recursive UBO chain from the client node down. Each level is indented one step further than its parent. Where total entities exceed 50, collapse contiguous non-party blocks into summary lines.
+
+**Beneficial Owners**
 ```
 🔷 {clientPartyName} ({clientPartyId})
    ✅ / ❌  {name} ({externalId})
@@ -355,27 +439,28 @@ Display:
 ```
 
 If total > 50, collapse non-party blocks:
-
 ```
 🔷 {clientPartyName} ({clientPartyId})
    ❌ {N} Beneficial Owners not included
-   ✅ {partyName} ({partyId})
-      ✅ {partyName} ({partyId})
+   ✅  {name} ({partyId})
+      ✅  {name} ({partyId})
          ❌ {N} Beneficial Owners not included
 ```
 
-*⚠️ Too many non-parties to display individually. Use ADD to create all or review in Intapp.*
+🔷 Client
+✅ {N} Beneficial Owners included in screening
+❌ {N} Beneficial Owners not included in screening
 
-*{N} of {total} UBOs are already included. Add the remaining {total−parties}?*
+- `PROMPT`:
+  - Type `ADD` to add all remaining Beneficial Owners to screening
+  - Type `SKIP` to move on
 
-- Type `ADD` to add all remaining UBOs to screening
-- Type `SKIP` to move on
-
-WAIT for user input:
-- `ADD` → create all entries in `{relatedParties.UBO.nonPartiesList}` via `intapp:create_party` → **GO TO** Step 3e
-- `SKIP` → **GO TO** Step 3e
-
----
+- `ACTION`: WAIT for user input:
+  - `ADD`
+    - create all entries in `{relatedParties.UBO.nonPartiesList}` via `intapp:create_party`
+    - **GO TO** Step 3e
+  - `SKIP`
+    - **GO TO** Step 3e
 
 #### Step 3e: Proceed
 
