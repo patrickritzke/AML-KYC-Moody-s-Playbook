@@ -127,6 +127,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - NEVER output any text between receiving tool results and the next defined step output
 - The ONLY permitted outputs are: (a) the exact status message defined for the current step, (b) the exact display output defined for display steps, and (c) a user prompt at a User Prompt step
 - Silence between steps is correct. Narration between steps is a violation.
+- Never render step or substep labels in output (e.g. "Step 3", "Step 3a — Parents", "Step 7b"). Step and substep identifiers are internal navigation only and must never appear in any display output.
 
 ---
 
