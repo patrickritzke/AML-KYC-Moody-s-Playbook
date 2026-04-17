@@ -182,7 +182,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 - Call `intapp:get_corp_structure_party_relationships` with:
   - `party_id` = `{clientPartyId}`
-  - `include_non_parties` = `false`
+  - `include_non_parties` = `true`
 - From the response, capture:
   - `{clientExternalId}` and `{providerType}`
   - `{relatedParties}` — per-bucket counts and `partiesList` of matched Intapp parties
@@ -193,47 +193,6 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 ### Step 3: Prompt User to Add More Key Corporate Structure Relationships to Screen
 
-| Field | Value |
-|---|---|
-| **Type** | User Prompt (multi-substep) |
-| **Status Message** | *(none — display output is the communication)* |
-| **Notification Rule** | Only show the defined display output and prompt for each substep. Do not show commentary or narration. |
-
-Step 3 runs four sequential substeps. Each substep displays the relationship tree for that category, shows the legend, prompts the user, then proceeds to the next substep automatically. After all four substeps complete, **GO TO** Step 3e.
-
-- Call `intapp:get_corp_structure_party_relationships` with `party_id` = `{clientPartyId}` and `include_non_parties` = `true` once before entering Step 3a. Reuse the result across all substeps — do not re-call between substeps unless a party creation occurs, in which case re-call before the next substep.
-- Party creation cap: 15 total across all substeps combined.
-- On any creation failure, note the error silently and continue with remaining entities.
-
----
-
-#### Display Rules (apply to all substeps)
-
-**Legend format** — always displayed at the top of each substep:
-
-```
-🔷 {clientPartyName} ({clientPartyId})
-✅ {N} {Relationship}s included in screening
-❌ {N} {Relationship}s not included in screening
-```
-
-**Tree format:**
-- ✅ `{partyName}` (`{partyId}`) — entity exists as an Intapp party
-- ❌ `{name}` (`{externalId}`) — entity has no Intapp party record
-- 🔷 `{clientPartyName}` (`{clientPartyId}`) — client node, shown for positional context
-
-**Large section rule:** If the total entity count for a substep exceeds 50, do not render individual non-party nodes. Instead render all ✅ party nodes in their correct hierarchical position and collapse each contiguous block of non-parties into a single summary line:
-
-```
-❌ {N} {Relationship}s not included
-```
-
-Add below the tree:
-
-*⚠️ Too many non-parties to display individually. Use ADD to create all or review in Intapp.*
-
-**Already-complete rule:** If `{relatedParties.[key].total}` = 0 OR `{relatedParties.[key].parties}` >= `{relatedParties.[key].total}`, display the legend and tree but omit the ADD/SKIP prompt and automatically proceed to the next substep.
-
 ---
 
 #### Step 3a: Parents
@@ -243,12 +202,11 @@ Add below the tree:
 - If already complete or 0 available → **GO TO** Step 3b
 
 Display:
-
-```
-🔷 {clientPartyName} ({clientPartyId})
+🔷 Client
 ✅ {N} Parents included in screening
 ❌ {N} Parents not included in screening
 
+```
 ✅ / ❌  {topmost ancestor name} ({externalId})
    ✅ / ❌  {next ancestor name} ({externalId})
       ...
@@ -273,12 +231,11 @@ WAIT for user input:
 - If already complete or 0 available → **GO TO** Step 3c
 
 Display:
-
-```
-🔷 {clientPartyName} ({clientPartyId})
+🔷 Client
 ✅ {N} Subsidiaries included in screening
 ❌ {N} Subsidiaries not included in screening
 
+```
 🔷 {clientPartyName} ({clientPartyId})
    ✅ / ❌  {subsidiaryName} ({externalId})
    ✅ / ❌  {subsidiaryName} ({externalId})
@@ -303,12 +260,11 @@ WAIT for user input:
 - If already complete or 0 available → **GO TO** Step 3d
 
 Display:
-
-```
-🔷 {clientPartyName} ({clientPartyId})
+🔷 Client
 ✅ {N} Board Members included in screening
 ❌ {N} Board Members not included in screening
 
+```
 🔷 {clientPartyName} ({clientPartyId})
    ✅ / ❌  {name} — {title}
    ✅ / ❌  {name} — {title}
@@ -333,12 +289,10 @@ WAIT for user input:
 - If already complete or 0 available → **GO TO** Step 3e
 
 Display:
-
-```
-🔷 {clientPartyName} ({clientPartyId})
+🔷 Client
 ✅ {N} UBOs included in screening
 ❌ {N} UBOs not included in screening
-
+```
 🔷 {clientPartyName} ({clientPartyId})
    ✅ / ❌  {name} ({externalId})
       ✅ / ❌  {name} ({externalId})
