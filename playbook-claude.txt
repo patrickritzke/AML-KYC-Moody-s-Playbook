@@ -192,11 +192,44 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 ---
 
-### Step 3: Prompt User to Add More Key Corporate Structure Relationships to Screen
+# Step 3: Review Corporate Structure Relationships
+
+| Field | Value |
+|---|---|
+| **Type** | Display + User Prompt (per bucket) |
+| **Status Message** | None. |
+| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
 
 ---
 
-#### Step 3a: Parents
+## Bucket Config
+
+| `{VAR}` | `{relationshipLabel}` | `{hierarchy}` |
+|---|---|---|
+| `Parent` | `Corporate Tree Parents` | `ancestor` |
+| `Subsidiary` | `Corporate Tree Subsidiaries` | `descendant` |
+| `Management/Board` | `Management & Board` | `descendant` |
+| `UBO` | `Beneficial Owners` | `descendant` |
+
+---
+
+## Loop
+
+```
+FOR EACH bucket in Bucket Config (in order):
+  CALL Step 3 Substep Template with bucket variables
+  IF nonPartiesList.length > 0:
+    WAIT for user input (ADD / SKIP)
+  CONTINUE to next bucket
+```
+
+When all buckets are complete → **GO TO** Step 4
+
+---
+
+---
+
+# Step 3 Substep Template
 
 | Field | Value |
 |---|---|
@@ -206,261 +239,58 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 ---
 
-**IF** `{relatedParties.Parent.total}` = 0:
+**IF** `{relatedParties.{VAR}.total}` = 0:
 
-- `DISPLAY`: "No Corporate Tree Parents found"
-
-- `ACTION`: GO TO Step 3b
+- `DISPLAY`: "No {relationshipLabel} found"
+- `ACTION`: CONTINUE to next bucket
 
 ---
 
-**IF** `{relatedParties.Parent.total}` > 0 AND `{relatedParties.Parent.nonPartiesList.length}` = 0:
+**IF** `{relatedParties.{VAR}.total}` > 0 AND `{relatedParties.{VAR}.nonPartiesList.length}` = 0:
 
-- `DISPLAY`: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
+- `DISPLAY`: render the full chain. For `ancestor`: indent each level further down to the client node. For `descendant`: render the client node at root with related entities as children below.
 
-**Corporate Tree Parents**
+**{relationshipLabel}**
 ```
-✅  {topmost ancestor name} ({externalId})
-   ✅  {next ancestor name} ({externalId})
-      ...
-         🔷 {clientPartyName} ({clientPartyId})
+[ancestor]                                        [descendant]
+✅  {topmost name} ({externalId})                 🔷 {clientPartyName} ({clientPartyId})
+   ✅  {name} ({externalId})                         ✅  {name} ({externalId})
+      ...                                               ✅  {name} ({externalId})
+         🔷 {clientPartyName} ({clientPartyId})            ...
 ```
-All available Corporate Tree Parents are included in screening. 
+All available {relationshipLabel} are included in screening.
 
-- `ACTION`: GO TO Step 3b
+- `ACTION`: CONTINUE to next bucket
 
+---
+
+**IF** `{relatedParties.{VAR}.total}` > 0 AND `{relatedParties.{VAR}.nonPartiesList.length}` > 0:
+
+- `DISPLAY`: render the full chain as above, with ✅ / ❌ per entry.
+
+**{relationshipLabel}**
+```
+[ancestor]                                             [descendant]
+✅ / ❌  {topmost name} ({externalId})                 🔷 {clientPartyName} ({clientPartyId})
+   ✅ / ❌  {name} ({externalId})                         ✅ / ❌  {name} ({externalId})
+      ...                                                    ✅ / ❌  {name} ({externalId})
+         🔷 {clientPartyName} ({clientPartyId})                  ...
 ```
 
-**IF** `{relatedParties.Parent.total}` > 0 AND `{relatedParties.Parent.nonPartiesList.length}` > 0:
-
-- `DISPLAY`: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
-
-**Corporate Tree Parents**
-```
-✅ / ❌  {topmost ancestor name} ({externalId})
-   ✅ / ❌  {next ancestor name} ({externalId})
-      ...
-         🔷 {clientPartyName} ({clientPartyId})
-```
 🔷 Client
-✅ {N} Parents included in screening --> Only show if 
-❌ {N} Parents not included in screening --> 
-
-- 'PROMPT':
-
-  - Type `ADD` to add all Corporate Tree Parents to screening
-  - Type `SKIP` to move on
-
-- 'ACTION':
-    -WAIT for user input:
-      - `ADD` 
-        - create all entries in `{relatedParties.Parent.nonPartiesList}` via `intapp:create_party`
-        - **GO TO** Step 3b
-      - `SKIP`
-        -**GO TO** Step 3b
-
----
-
-#### Step 3b: Immediate Subsidiaries
-
-| Field | Value |
-|---|---|
-| **Type** | Display |
-| **Status Message** | None. |
-| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
-
----
-
-**IF** `{relatedParties.Subsidiary.total}` = 0:
-
-- `DISPLAY`:
-
-No Corporate Tree Subsidiaries found
-
-- `ACTION`: GO TO Step 3c
-
----
-
-**IF** `{relatedParties.Subsidiary.total}` > 0 AND `{relatedParties.Subsidiary.nonPartiesList.length}` = 0:
-
-- `DISPLAY`: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
-
-**Corporate Tree Subsidiaries**
-```
-🔷 {clientPartyName} ({clientPartyId})
-   ✅  {subsidiaryName} ({externalId})
-   ✅  {subsidiaryName} ({externalId})
-    ...
-```
-
-All available Corporate Tree Subsidiaries are included in screening.
-
-- `ACTION`: GO TO Step 3c
-
----
-
-**IF** `{relatedParties.Subsidiary.total}` > 0 AND `{relatedParties.Subsidiary.nonPartiesList.length}` > 0:
-
-- `DISPLAY`: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
-
-**Corporate Tree Subsidiaries**
-```
-🔷 {clientPartyName} ({clientPartyId})
-   ✅ / ❌  {subsidiaryName} ({externalId})
-   ✅ / ❌  {subsidiaryName} ({externalId})
-    ...
-```
-🔷 Client
-✅ {N} Subsidiaries included in screening
-❌ {N} Subsidiaries not included in screening
+✅ {N} {relationshipLabel} included in screening
+❌ {N} {relationshipLabel} not included in screening
 
 - `PROMPT`:
-  - Type `ADD` to add all remaining Subsidiaries to screening
+  - Type `ADD` to add all remaining {relationshipLabel} to screening
   - Type `SKIP` to move on
 
 - `ACTION`: WAIT for user input:
   - `ADD`
-    - create all entries in `{relatedParties.Subsidiary.nonPartiesList}` via `intapp:create_party`
-    - **GO TO** Step 3c
+    - create all entries in `{relatedParties.{VAR}.nonPartiesList}` via `intapp:create_party`
+    - CONTINUE to next bucket
   - `SKIP`
-    - **GO TO** Step 3c
-
----
-
-#### Step 3c: Management & Board
-
-| Field | Value |
-|---|---|
-| **Type** | Display |
-| **Status Message** | None. |
-| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
-
----
-
-**IF** `{relatedParties["Management/Board"].total}` = 0:
-
-- `DISPLAY`:
-
-No Management & Board Members found
-
-- `ACTION`: GO TO Step 3d
-
----
-
-**IF** `{relatedParties["Management/Board"].total}` > 0 AND `{relatedParties["Management/Board"].nonPartiesList.length}` = 0:
-
-- `DISPLAY`: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
-
-**Management & Board**
-```
-🔷 {clientPartyName} ({clientPartyId})
-   ✅  {name} — {title}
-   ✅  {name} — {title}
-   ...
-```
-All available Management & Board Members are included in screening.
-
-- `ACTION`: GO TO Step 3d
-
----
-
-**IF** `{relatedParties["Management/Board"].total}` > 0 AND `{relatedParties["Management/Board"].nonPartiesList.length}` > 0:
-
-- `DISPLAY`: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
-
-**Management & Board**
-```
-🔷 {clientPartyName} ({clientPartyId})
-   ✅ / ❌  {name} — {title}
-   ✅ / ❌  {name} — {title}
-   ...
-```
-🔷 Client
-✅ {N} Board Members included in screening
-❌ {N} Board Members not included in screening
-
-- `PROMPT`:
-  - Type `ADD` to add all remaining Board Members to screening
-  - Type `SKIP` to move on
-
-- `ACTION`: WAIT for user input:
-  - `ADD`
-    - create all entries in `{relatedParties["Management/Board"].nonPartiesList}` via `intapp:create_party`
-    - **GO TO** Step 3d
-  - `SKIP`
-    - **GO TO** Step 3d
-
----
-
-#### Step 3d: Beneficial Owners
-
-| Field | Value |
-|---|---|
-| **Type** | Display |
-| **Status Message** | None. |
-| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
-
----
-
-**IF** `{relatedParties.UBO.total}` = 0:
-
-- `DISPLAY`: "No Beneficial Owners found"
-- `ACTION`: GO TO Step 3e
-
----
-
-**IF** `{relatedParties.UBO.total}` > 0 AND `{relatedParties.UBO.nonPartiesList.length}` = 0:
-
-- `DISPLAY`: render the full recursive UBO chain from the client node down. Each level is indented one step further than its parent.
-
-**Beneficial Owners**
-```
-🔷 {clientPartyName} ({clientPartyId})
-   ✅  {name} ({externalId})
-      ✅  {name} ({externalId})
-         ...
-```
-All available Beneficial Owners are included in screening.
-
-- `ACTION`: GO TO Step 3e
-
----
-
-**IF** `{relatedParties.UBO.total}` > 0 AND `{relatedParties.UBO.nonPartiesList.length}` > 0:
-
-- `DISPLAY`: render the full recursive UBO chain from the client node down. Each level is indented one step further than its parent. Where total entities exceed 50, collapse contiguous non-party blocks into summary lines.
-
-**Beneficial Owners**
-```
-🔷 {clientPartyName} ({clientPartyId})
-   ✅ / ❌  {name} ({externalId})
-      ✅ / ❌  {name} ({externalId})
-         ...
-```
-
-If total > 50, collapse non-party blocks:
-```
-🔷 {clientPartyName} ({clientPartyId})
-   ❌ {N} Beneficial Owners not included
-   ✅  {name} ({partyId})
-      ✅  {name} ({partyId})
-         ❌ {N} Beneficial Owners not included
-```
-
-🔷 Client
-✅ {N} Beneficial Owners included in screening
-❌ {N} Beneficial Owners not included in screening
-
-- `PROMPT`:
-  - Type `ADD` to add all remaining Beneficial Owners to screening
-  - Type `SKIP` to move on
-
-- `ACTION`: WAIT for user input:
-  - `ADD`
-    - create all entries in `{relatedParties.UBO.nonPartiesList}` via `intapp:create_party`
-    - **GO TO** Step 3e
-  - `SKIP`
-    - **GO TO** Step 3e
+    - CONTINUE to next bucket
 
 #### Step 3e: Proceed
 
