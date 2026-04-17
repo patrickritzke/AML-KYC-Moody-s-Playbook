@@ -192,105 +192,131 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 ---
 
-# Step 3: Review Corporate Structure Relationships
-
-| Field | Value |
-|---|---|
-| **Type** | Display + User Prompt (per bucket) |
-| **Status Message** | None. |
-| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
+### Step 3: Review Corporate Structure Relationships
 
 ---
 
-## Bucket Config
+#### Step 3a: Parent
 
-| `{VAR}` | `{relationshipLabel}` | `{hierarchy}` |
-|---|---|---|
-| `Parent` | `Corporate Tree Parents` | `ancestor` |
-| `Subsidiary` | `Corporate Tree Subsidiaries` | `descendant` |
-| `Management/Board` | `Management & Board` | `descendant` |
-| `UBO` | `Beneficial Owners` | `descendant` |
+**Create variable {treeHierarchy}**
+- From relatedParties.Parent:
+  - Client node: { name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", level: <deepest ancestor level + 1> }
+  - For each entry in partiesList: { name, externalId, partyId, type: "party", level: <depth from root> }
+  - For each entry in nonPartiesList: { name, externalId, partyId: null, type: "non-party", level: <depth from root> }
+- Set {treeHierarchy} = sorted by level ascending.
 
----
+**IF** relatedParties.Parent.total = 0:
+- DISPLAY: "No Corporate Tree Parents available"
+- ACTION: GO TO Step 3b
 
-## Loop
+**IF** relatedParties.Parent.total > 0 AND relatedParties.Parent.nonPartiesList.length = 0:
+- DISPLAY: "All Corporate Tree Parents included in screening"
+- ACTION: GO TO Step 3b
 
-```
-FOR EACH bucket in Bucket Config (in order):
-  CALL Step 3 Substep Template with bucket variables
-  IF nonPartiesList.length > 0:
-    WAIT for user input (ADD / SKIP)
-  CONTINUE to next bucket
-```
-
-When all buckets are complete → **GO TO** Step 4
-
----
-
----
-
-# Step 3 Substep Template
-
-| Field | Value |
-|---|---|
-| **Type** | Display |
-| **Status Message** | None. |
-| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
+**IF** relatedParties.Parent.total > 0 AND relatedParties.Parent.nonPartiesList.length > 0:
+- DISPLAY:
+  Render Appendix M — Hierarchy display
+    nodes: {treeHierarchy}
+    label: Corporate tree parents
+  Type `ADD` to add {N} parents to screening
+  Type `SKIP` to continue
+- ACTION:
+  - WAIT for user input
+    - ADD → create parties via intapp:create_party → GO TO Step 3b
+    - SKIP → GO TO Step 3b
 
 ---
 
-**IF** `{relatedParties.{VAR}.total}` = 0:
+#### Step 3b: Subsidiary
 
-- `DISPLAY`: "No {relationshipLabel} found"
-- `ACTION`: CONTINUE to next bucket
+**Create variable {treeHierarchy}**
+- From relatedParties.Subsidiary:
+  - Client node: { name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", level: 0 }
+  - For each entry in partiesList: { name, externalId, partyId, type: "party", level: <depth from client> }
+  - For each entry in nonPartiesList: { name, externalId, partyId: null, type: "non-party", level: <depth from client> }
+- Set {treeHierarchy} = sorted by level ascending.
+
+**IF** relatedParties.Subsidiary.total = 0:
+- DISPLAY: "No Corporate Tree Subsidiaries available"
+- ACTION: GO TO Step 3c
+
+**IF** relatedParties.Subsidiary.total > 0 AND relatedParties.Subsidiary.nonPartiesList.length = 0:
+- DISPLAY: "All Corporate Tree Subsidiaries included in screening"
+- ACTION: GO TO Step 3c
+
+**IF** relatedParties.Subsidiary.total > 0 AND relatedParties.Subsidiary.nonPartiesList.length > 0:
+- DISPLAY:
+  Render Appendix M — Hierarchy display
+    nodes: {treeHierarchy}
+    label: Corporate tree subsidiaries
+  Type `ADD` to add {N} subsidiaries to screening
+  Type `SKIP` to continue
+- ACTION:
+  - WAIT for user input
+    - ADD → create parties via intapp:create_party → GO TO Step 3c
+    - SKIP → GO TO Step 3c
 
 ---
 
-**IF** `{relatedParties.{VAR}.total}` > 0 AND `{relatedParties.{VAR}.nonPartiesList.length}` = 0:
+#### Step 3c: Management & Board
 
-- `DISPLAY`: render the full chain. For `ancestor`: indent each level further down to the client node. For `descendant`: render the client node at root with related entities as children below.
+**Create variable {treeHierarchy}**
+- From relatedParties.Management/Board:
+  - Client node: { name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", level: 0 }
+  - For each entry in partiesList: { name, externalId, partyId, type: "party", level: 1 }
+  - For each entry in nonPartiesList: { name, externalId, partyId: null, type: "non-party", level: 1 }
+- Set {treeHierarchy} = sorted by level ascending.
 
-**{relationshipLabel}**
-```
-[ancestor]                                        [descendant]
-✅  {topmost name} ({externalId})                 🔷 {clientPartyName} ({clientPartyId})
-   ✅  {name} ({externalId})                         ✅  {name} ({externalId})
-      ...                                               ✅  {name} ({externalId})
-         🔷 {clientPartyName} ({clientPartyId})            ...
-```
-All available {relationshipLabel} are included in screening.
+**IF** relatedParties.Management/Board.total = 0:
+- DISPLAY: "No Management & Board members available"
+- ACTION: GO TO Step 3d
 
-- `ACTION`: CONTINUE to next bucket
+**IF** relatedParties.Management/Board.total > 0 AND relatedParties.Management/Board.nonPartiesList.length = 0:
+- DISPLAY: "All Management & Board members included in screening"
+- ACTION: GO TO Step 3d
+
+**IF** relatedParties.Management/Board.total > 0 AND relatedParties.Management/Board.nonPartiesList.length > 0:
+- DISPLAY:
+  Render Appendix M — Hierarchy display
+    nodes: {treeHierarchy}
+    label: Management & board
+  Type `ADD` to add {N} board members to screening
+  Type `SKIP` to continue
+- ACTION:
+  - WAIT for user input
+    - ADD → create parties via intapp:create_party → GO TO Step 3d
+    - SKIP → GO TO Step 3d
 
 ---
 
-**IF** `{relatedParties.{VAR}.total}` > 0 AND `{relatedParties.{VAR}.nonPartiesList.length}` > 0:
+#### Step 3d: UBO
 
-- `DISPLAY`: render the full chain as above, with ✅ / ❌ per entry.
+**Create variable {treeHierarchy}**
+- From relatedParties.UBO:
+  - Client node: { name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", level: 0 }
+  - For each entry in partiesList: { name, externalId, partyId, type: "party", level: <depth from client> }
+  - For each entry in nonPartiesList: { name, externalId, partyId: null, type: "non-party", level: <depth from client> }
+- Set {treeHierarchy} = sorted by level ascending.
 
-**{relationshipLabel}**
-```
-[ancestor]                                             [descendant]
-✅ / ❌  {topmost name} ({externalId})                 🔷 {clientPartyName} ({clientPartyId})
-   ✅ / ❌  {name} ({externalId})                         ✅ / ❌  {name} ({externalId})
-      ...                                                    ✅ / ❌  {name} ({externalId})
-         🔷 {clientPartyName} ({clientPartyId})                  ...
-```
+**IF** relatedParties.UBO.total = 0:
+- DISPLAY: "No Beneficial Owners available"
+- ACTION: GO TO Step 3e
 
-🔷 Client
-✅ {N} {relationshipLabel} included in screening
-❌ {N} {relationshipLabel} not included in screening
+**IF** relatedParties.UBO.total > 0 AND relatedParties.UBO.nonPartiesList.length = 0:
+- DISPLAY: "All Beneficial Owners included in screening"
+- ACTION: GO TO Step 3e
 
-- `PROMPT`:
-  - Type `ADD` to add all remaining {relationshipLabel} to screening
-  - Type `SKIP` to move on
-
-- `ACTION`: WAIT for user input:
-  - `ADD`
-    - create all entries in `{relatedParties.{VAR}.nonPartiesList}` via `intapp:create_party`
-    - CONTINUE to next bucket
-  - `SKIP`
-    - CONTINUE to next bucket
+**IF** relatedParties.UBO.total > 0 AND relatedParties.UBO.nonPartiesList.length > 0:
+- DISPLAY:
+  Render Appendix M — Hierarchy display
+    nodes: {treeHierarchy}
+    label: Beneficial owners
+  Type `ADD` to add {N} beneficial owners to screening
+  Type `SKIP` to continue
+- ACTION:
+  - WAIT for user input
+    - ADD → create parties via intapp:create_party → GO TO Step 3e
+    - SKIP → GO TO Step 3e
 
 #### Step 3e: Proceed
 
@@ -969,3 +995,56 @@ Relationship buckets are **non-exclusive** — a single entity can and should be
 - If `_moodyAgentRuns` is absent or empty → treat as `rows: []`
 - To clear the table: `{ "_moodyAgentRuns": { "rows": [] } }`
 - Only include `_moodyAgentRuns` in the body — all other party fields are left untouched
+
+# Appendix M: Hierarchy display
+
+Renders `{treeHierarchy}` as an indented chain with a summary line.
+
+---
+
+## Indicators
+
+| Symbol | Type | Meaning |
+|---|---|---|
+| 🔷 | `client` | The client party |
+| ✅ | `party` | Exists as an Intapp party |
+| ❌ | `non-party` | No Intapp party record |
+
+---
+
+## Empty state
+
+If `{treeHierarchy}` contains only the client node, render:
+
+```
+No {label} found.
+```
+
+Stop. Do not render a chain or summary line.
+
+---
+
+## Chain
+
+Sort by `level` ascending. Indent each row 3 spaces per level.
+
+```
+{indicator}  {name} ({externalId})
+   {indicator}  {name} ({externalId})
+      {indicator}  {name} ({externalId})
+```
+
+---
+
+## Summary line
+
+Render immediately below the chain:
+
+```
+🔷 Client
+✅ {N} {label} included in screening
+❌ {N} {label} not included in screening
+```
+
+- Omit ✅ line if no `party` rows
+- Omit ❌ line if no `non-party` rows
