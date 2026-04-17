@@ -197,6 +197,12 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 #### Step 3a: Parents
 
+| Field | Value |
+|---|---|
+| **Type** | Display |
+| **Status Message** | None. |
+| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
+
 - Bucket: `{relatedParties.Parent}`
 - Tree: render the full ancestor chain from the topmost parent down to the client node. Each level is indented one step further than its parent.
 - If already complete or 0 available → **GO TO** Step 3b
@@ -225,6 +231,12 @@ WAIT for user input:
 ---
 
 #### Step 3b: Immediate Subsidiaries
+
+| Field | Value |
+|---|---|
+| **Type** | Display |
+| **Status Message** | None. |
+| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
 
 - Bucket: `{relatedParties.Subsidiary}`
 - Tree: render the client node at the root, with all immediate subsidiaries as direct children one level below. No further nesting — immediate subsidiaries only.
@@ -255,6 +267,12 @@ WAIT for user input:
 
 #### Step 3c: Management & Board
 
+| Field | Value |
+|---|---|
+| **Type** | Display |
+| **Status Message** | None. |
+| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
+
 - Bucket: `{relatedParties["Management/Board"]}`
 - Tree: render the client node at the root, with all board members as direct children. Include title where available.
 - If already complete or 0 available → **GO TO** Step 3d
@@ -283,6 +301,12 @@ WAIT for user input:
 ---
 
 #### Step 3d: Beneficial Owners
+
+| Field | Value |
+|---|---|
+| **Type** | Display |
+| **Status Message** | None. |
+| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
 
 - Bucket: `{relatedParties.UBO}`
 - Tree: render the full recursive UBO chain. ✅ party nodes are shown in their correct hierarchical position. Where total entities exceed 50, apply the large section rule — collapse contiguous non-party blocks into summary lines.
@@ -323,6 +347,12 @@ WAIT for user input:
 ---
 
 #### Step 3e: Proceed
+
+| Field | Value |
+|---|---|
+| **Type** | Prompt |
+| **Status Message** | None. |
+| **Notification Rule** | Only show Display and prompt. Do not show any commentary or narration |
 
 - If any parties were created across Steps 3a–3d → re-call `intapp:get_corp_structure_party_relationships` with `include_non_parties` = `false`, update `{relatedParties}`
 - Display:
