@@ -199,10 +199,12 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 #### Step 3a: Parent
 
 **Build `{treeHierarchy}`**
-- Root node: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", level: 0, children: [] }`
-- For each entry in `relatedParties.Parent.partiesList`: create a node `{ name, externalId, partyId, type: "party", level: <depth from root>, children: [] }` and nest under its parent node
-- For each entry in `relatedParties.Parent.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", level: <depth from root>, children: [] }` and nest under its parent node
-- Attach children to their correct parent node by position in tree; client node sits at its natural depth with ancestors above it
+- Create a node for the client: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", parentExternalId: null, children: [] }`
+- For each entry in `relatedParties.Parent.partiesList`: create a node `{ name, externalId, partyId, type: "party", parentExternalId, children: [] }`
+- For each entry in `relatedParties.Parent.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", parentExternalId, children: [] }`
+- Build a lookup map keyed by `externalId` across all nodes (including client)
+- For each non-root node, find its parent using `parentExternalId` and push it into that parent's `children[]`. If `parentExternalId` is null or not found in the map, attach to the root (GUO)
+- The root node is the entry with no matching parent in the map (i.e. the GUO)
 
 **IF** `relatedParties.Parent.total` = 0:
 - DISPLAY: `"No Corporate Tree Parents available"`
@@ -229,10 +231,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 #### Step 3b: Subsidiary
 
 **Build `{treeHierarchy}`**
-- Root node: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", level: 0, children: [] }`
-- For each entry in `relatedParties.Subsidiary.partiesList`: create a node `{ name, externalId, partyId, type: "party", level: <depth from client>, children: [] }` and nest under its parent node
-- For each entry in `relatedParties.Subsidiary.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", level: <depth from client>, children: [] }` and nest under its parent node
-- Attach children to their correct parent node by position in tree; client node is the root
+- Create a node for the client: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", parentExternalId: null, children: [] }`
+- For each entry in `relatedParties.Subsidiary.partiesList`: create a node `{ name, externalId, partyId, type: "party", parentExternalId, children: [] }`
+- For each entry in `relatedParties.Subsidiary.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", parentExternalId, children: [] }`
+- Build a lookup map keyed by `externalId` across all nodes (including client)
+- For each non-root node, find its parent using `parentExternalId` and push it into that parent's `children[]`. If `parentExternalId` is null or not found in the map, attach directly to the client node
+- The root node is the client
+
 
 **IF** `relatedParties.Subsidiary.total` = 0:
 - DISPLAY: `"No Corporate Tree Subsidiaries available"`
@@ -289,10 +294,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 #### Step 3d: UBO
 
 **Build `{treeHierarchy}`**
-- Root node: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", level: 0, children: [] }`
-- For each entry in `relatedParties.UBO.partiesList`: create a node `{ name, externalId, partyId, type: "party", level: <depth from client>, children: [] }` and nest under its parent node
-- For each entry in `relatedParties.UBO.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", level: <depth from client>, children: [] }` and nest under its parent node
-- Attach children to their correct parent node by ownership chain; client node is the root
+- Create a node for the client: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", parentExternalId: null, children: [] }`
+- For each entry in `relatedParties.UBO.partiesList`: create a node `{ name, externalId, partyId, type: "party", parentExternalId, children: [] }`
+- For each entry in `relatedParties.UBO.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", parentExternalId, children: [] }`
+- Build a lookup map keyed by `externalId` across all nodes (including client)
+- For each non-root node, find its parent using `parentExternalId` and push it into that parent's `children[]`. If `parentExternalId` is null or not found in the map, attach directly to the client node
+- The root node is the client
+
 
 **IF** `relatedParties.UBO.total` = 0:
 - DISPLAY: `"No Beneficial Owners available"`
@@ -1011,7 +1019,7 @@ Renders `{treeHierarchy}` as a recursively nested indented tree.
   "externalId": "string",
   "partyId": "string | null",
   "type": "client | party | non-party",
-  "level": 0,
+  "parentExternalId": "string | null",
   "children": []
 }
 ```
