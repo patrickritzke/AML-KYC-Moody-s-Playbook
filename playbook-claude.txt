@@ -198,7 +198,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 #### Step 3a: Parent
 
-**Build `{treeHierarchy}`**
+**Build `{parentTreeHierarchy}`**
 - Use `relatedParties.Parent.displayHierarchy` as the tree structure.
 - For each node in the hierarchy, enrich with `name`, `partyId`, and `type` by matching `externalId` against `partiesList` (type = `"party"`) and `nonPartiesList` (type = `"non-party"`).
 - The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`.
@@ -215,7 +215,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **IF** `relatedParties.Parent.total` > 0 AND `relatedParties.Parent.nonPartiesList.length` > 0:
 - DISPLAY:
   Render Appendix M — Hierarchy display
-    nodes: `{treeHierarchy}`
+    treeHierarchy: `{parentTreeHierarchy}`
     label: `Corporate tree parents`
   `Type ADD to add {N} parents to screening`
   `Type SKIP to continue`
@@ -228,12 +228,11 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 #### Step 3b: Subsidiary
 
-**Build `{treeHierarchy}`**
+**Build `{subsidiaryTreeHierarchy}`**
 - Use `relatedParties.Subsidiary.displayHierarchy` as the tree structure.
 - For each node in the hierarchy, enrich with `name`, `partyId`, and `type` by matching `externalId` against `partiesList` (type = `"party"`) and `nonPartiesList` (type = `"non-party"`).
 - The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`.
 - If a node's `externalId` cannot be matched to either list, skip it.
-
 
 **IF** `relatedParties.Subsidiary.total` = 0:
 - DISPLAY: `"No Corporate Tree Subsidiaries available"`
@@ -246,7 +245,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **IF** `relatedParties.Subsidiary.total` > 0 AND `relatedParties.Subsidiary.nonPartiesList.length` > 0:
 - DISPLAY:
   Render Appendix M — Hierarchy display
-    nodes: `{treeHierarchy}`
+    treeHierarchy: `{subsidiaryTreeHierarchy}`
     label: `Corporate tree subsidiaries`
   `Type ADD to add {N} subsidiaries to screening`
   `Type SKIP to continue`
@@ -259,11 +258,11 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 #### Step 3c: Management & Board
 
-**Build `{treeHierarchy}`**
-- Root node: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", level: 0, children: [] }`
-- For each entry in `relatedParties.Management/Board.partiesList`: create a node `{ name, externalId, partyId, type: "party", level: 1, children: [] }` and attach as direct child of root
-- For each entry in `relatedParties.Management/Board.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", level: 1, children: [] }` and attach as direct child of root
-- Board members are always flat at level 1 — they have no children
+**Build `{boardTreeHierarchy}`**
+- Root node: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", children: [] }`
+- For each entry in `relatedParties.Management/Board.partiesList`: create a node `{ name, externalId, partyId, type: "party", children: [] }` and attach as direct child of root
+- For each entry in `relatedParties.Management/Board.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", children: [] }` and attach as direct child of root
+- Board members are always flat — they have no children
 
 **IF** `relatedParties.Management/Board.total` = 0:
 - DISPLAY: `"No Management & Board members available"`
@@ -276,7 +275,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **IF** `relatedParties.Management/Board.total` > 0 AND `relatedParties.Management/Board.nonPartiesList.length` > 0:
 - DISPLAY:
   Render Appendix M — Hierarchy display
-    nodes: `{treeHierarchy}`
+    treeHierarchy: `{boardTreeHierarchy}`
     label: `Management & board`
   `Type ADD to add {N} board members to screening`
   `Type SKIP to continue`
@@ -289,12 +288,11 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 #### Step 3d: UBO
 
-**Build `{treeHierarchy}`**
+**Build `{uboTreeHierarchy}`**
 - Use `relatedParties.UBO.displayHierarchy` as the tree structure.
 - For each node in the hierarchy, enrich with `name`, `partyId`, and `type` by matching `externalId` against `partiesList` (type = `"party"`) and `nonPartiesList` (type = `"non-party"`).
 - The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`.
 - If a node's `externalId` cannot be matched to either list, skip it.
-
 
 **IF** `relatedParties.UBO.total` = 0:
 - DISPLAY: `"No Beneficial Owners available"`
@@ -307,7 +305,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **IF** `relatedParties.UBO.total` > 0 AND `relatedParties.UBO.nonPartiesList.length` > 0:
 - DISPLAY:
   Render Appendix M — Hierarchy display
-    nodes: `{treeHierarchy}`
+    treeHierarchy: `{uboTreeHierarchy}`
     label: `Beneficial owners`
   `Type ADD to add {N} beneficial owners to screening`
   `Type SKIP to continue`
@@ -315,7 +313,6 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - WAIT for user input
     - `ADD` → create parties via `intapp:create_party` → GO TO Step 3e
     - `SKIP` → GO TO Step 3e
-
 ---
 
 #### Step 3e: Proceed
