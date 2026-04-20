@@ -585,15 +585,26 @@ result = tool response
 if result is an array        → result = result[0]
 if result has key "text"     → result = JSON.parse(result.text)
 if result is an array        → result = result[0]
-xml = result._moodyAgentRuns ?? ""
+xml             = result._moodyAgentRuns        ?? ""
+xml_runs_client = result._moodyAgentRunsClient  ?? ""
 ```
 
+> `xml_runs_client` is only read and written when `partyId` = `{clientPartyId}`. Skip for all other parties.
+
 - **Parse** the `_moodyAgentRuns` XML string back into `TableCellData` rows using the pattern defined in Appendix K. If `xml` is absent, null, or empty string, treat as an empty rows array.
+
+  For the client party only, also parse `xml_runs_client` into its own rows array using the `_moodyAgentRunsClient` column definitions in Appendix K. If absent, null, or empty string, treat as an empty rows array.
 
 - **Before patching**, output one line per party:
 
 ```
 {partyName} ({partyId}): {n} existing rows — appending 1 → {n+1} total
+```
+
+  For the client party only, add a second line immediately after:
+
+```
+{clientPartyName} ({clientPartyId}) [overall]: {n} existing rows — appending 1 → {n+1} total
 ```
 
   If existing rows = 0 for a party that has appeared in a prior run, stop and re-fetch before proceeding.
@@ -615,8 +626,16 @@ xml = result._moodyAgentRuns ?? ""
 | `ranForClient` | `{ "stringValue": "{clientPartyName} ({clientPartyId})" }` — same value for every party in this loop |
 | `relationship` | `{ "stringValue": "relationship label(s) for this party, comma-separated. 'Client' if client party" }` |
 
+- For the client party only, **build the new `_moodyAgentRunsClient` row** using the following field mappings:
+
+| Column | Source |
+|---|---|
+| `dateComplete` | `{ "dateValue": "<today date and time ISO 8601, e.g. 2026-04-15T18:50:44Z>" }` |
+| `reqID` | `{ "stringValue": "{reqID}" }` |
+| `riskScoreOverall` | `{ "stringValue": "{overallRiskLevel} ({overallRiskScore})" }` — use `"None"` if `overallRiskScore` = 0 or null |
+
 - Call `intapp:update_party` with `partyId` and the appropriate body. Expect `204 No Content` on success. On failure, note the error and continue to next party — do not abort.
-  - If `partyId` = `{clientPartyId}`: `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] }, "_moodyAgentNext": "<6 months from today at midnight UTC, e.g. 2026-10-15T00:00:00Z>" }`
+  - If `partyId` = `{clientPartyId}`: `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] }, "_moodyAgentRunsClient": { "rows": [...existingRunsClientRows, newRunsClientRow] }, "_moodyAgentNext": "<6 months from today at midnight UTC, e.g. 2026-10-15T00:00:00Z>" }`
   - All other parties: `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`
 
 - Track result per party: `{ partyId, partyName, success: true/false, error?: "..." }`
@@ -635,7 +654,6 @@ After all patches complete, display:
 ---
 
 Playbook completed.
-
 ---
 
 ### Step END
@@ -958,13 +976,29 @@ Relationship buckets are **non-exclusive** — a single entity can and should be
 
 ---
 
-### Appendix K: Patching `_moodyAgentRuns` on a Party
+# Playbook Update — Appendix K Rewrite
 
-`_moodyAgentRuns` is a DataTable custom field on the Party entity. The PATCH endpoint replaces the entire table — appending requires a read-modify-write: GET existing rows, parse XML, append new row, PATCH full array.
+Replace the existing Appendix K in full with the following:
+
+---
+
+# Playbook Update — Appendix K Rewrite
+
+Replace the existing Appendix K in full with the following:
+
+---
+
+### Appendix K: Patching DataTable Fields on a Party
+
+Two DataTable custom fields are written during Step COMPLETE. Both follow the same read-modify-write pattern: GET existing rows, parse XML, append new row, PATCH full array. The PATCH endpoint replaces the entire table — appending requires reading first.
 
 **Endpoint:** `PATCH /api/common/v1/parties/{partyId}` → `204 No Content`
 
-#### Column Definitions
+---
+
+#### `_moodyAgentRuns` — Written to all parties (client and related)
+
+Records each party's own AML/KYC risk score from each run.
 
 | Key | Display Name | Type |
 |---|---|---|
@@ -983,19 +1017,55 @@ Relationship buckets are **non-exclusive** — a single entity can and should be
 
 > `ranForClient` and `relationship` must be added to the table schema in the Intapp form designer before they can be written via the API.
 
-#### Rules
+---
+
+#### `_moodyAgentRunsClient` — Written to client party only
+
+Records the overall aggregate risk score from each run — the risk across the full corporate structure screened for that client, not the client's own party-level score.
+
+| Key | Display Name | Type |
+|---|---|---|
+| `dateComplete` | Date Completed | Date — ISO 8601 with time, e.g. `2026-04-15T20:42:23Z` |
+| `reqID` | Request ID | String |
+| `riskScoreOverall` | Overall Risk Score | String — e.g. `"High (85)"` or `"None"` |
+
+---
+
+#### Rules (apply to both tables)
 
 - Each cell must be a **typed object**: `{ "stringValue": "..." }` or `{ "dateValue": "..." }` — plain strings cause `400`
-- GET response returns `_moodyAgentRuns` as raw XML — parse back to `TableCellData` before re-patching
+- GET response returns each table as raw XML — parse back to `TableCellData` rows before re-patching
 - The GET tool result is wrapped in a content block — unwrap before accessing:
   ```
   if result is array       → result = result[0]
   if result has key "text" → result = JSON.parse(result.text); if array → result[0]
-  xml = result._moodyAgentRuns ?? ""
+  xml_runs         = result._moodyAgentRuns         ?? ""
+  xml_overall_runs = result._moodyAgentRunsClient   ?? ""
   ```
-- If `_moodyAgentRuns` is absent or empty → treat as `rows: []`
-- To clear the table: `{ "_moodyAgentRuns": { "rows": [] } }`
-- Only include `_moodyAgentRuns` in the body — all other party fields are left untouched
+- If either field is absent, null, or empty string → treat as `rows: []`
+- Parse each table independently into its own rows array
+- To clear a table: `{ "_moodyAgentRuns": { "rows": [] } }`
+- Only include these fields in the PATCH body — all other party fields are left untouched
+
+---
+
+#### PATCH Body
+
+**Client party** (`partyId` = `{clientPartyId}`):
+```
+{
+  "_moodyAgentRuns":        { "rows": [...existingRows, newRow] },
+  "_moodyAgentRunsClient": { "rows": [...existingOverallRows, newOverallRow] },
+  "_moodyAgentNext":        "<6 months from today at midnight UTC, e.g. 2026-10-15T00:00:00Z>"
+}
+```
+
+**All other parties**:
+```
+{
+  "_moodyAgentRuns": { "rows": [...existingRows, newRow] }
+}
+```
 
 ---
 
