@@ -208,11 +208,11 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - DISPLAY: `"No Corporate Tree Parents available"`
 - ACTION: GO TO Step 3b
 
-**IF** `relatedParties.Parent.total` > 0 AND `relatedParties.Parent.nonPartiesList.length` = 0:
+**IF** `relatedParties.Parent.total` > 0 AND `relatedParties.Parent.nonParties` = 0:
 - DISPLAY: `"All Corporate Tree Parents included in screening"`
 - ACTION: GO TO Step 3b
 
-**IF** `relatedParties.Parent.total` > 0 AND `relatedParties.Parent.nonPartiesList.length` > 0:
+**IF** `relatedParties.Parent.total` > 0 AND `relatedParties.Parent.nonParties` > 0:
 - DISPLAY:
   Render Appendix M — Hierarchy display
     treeHierarchy: `{parentTreeHierarchy}`
@@ -238,11 +238,11 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - DISPLAY: `"No Corporate Tree Subsidiaries available"`
 - ACTION: GO TO Step 3c
 
-**IF** `relatedParties.Subsidiary.total` > 0 AND `relatedParties.Subsidiary.nonPartiesList.length` = 0:
+**IF** `relatedParties.Subsidiary.total` > 0 AND `relatedParties.Subsidiary.nonParties` = 0:
 - DISPLAY: `"All Corporate Tree Subsidiaries included in screening"`
 - ACTION: GO TO Step 3c
 
-**IF** `relatedParties.Subsidiary.total` > 0 AND `relatedParties.Subsidiary.nonPartiesList.length` > 0:
+**IF** `relatedParties.Subsidiary.total` > 0 AND `relatedParties.Subsidiary.nonParties` > 0:
 - DISPLAY:
   Render Appendix M — Hierarchy display
     treeHierarchy: `{subsidiaryTreeHierarchy}`
@@ -268,11 +268,11 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - DISPLAY: `"No Management & Board members available"`
 - ACTION: GO TO Step 3d
 
-**IF** `relatedParties.Management/Board.total` > 0 AND `relatedParties.Management/Board.nonPartiesList.length` = 0:
+**IF** `relatedParties.Management/Board.total` > 0 AND `relatedParties.Management/Board.nonParties` = 0:
 - DISPLAY: `"All Management & Board members included in screening"`
 - ACTION: GO TO Step 3d
 
-**IF** `relatedParties.Management/Board.total` > 0 AND `relatedParties.Management/Board.nonPartiesList.length` > 0:
+**IF** `relatedParties.Management/Board.total` > 0 AND `relatedParties.Management/Board.nonParties` > 0:
 - DISPLAY:
   Render Appendix M — Hierarchy display
     treeHierarchy: `{boardTreeHierarchy}`
@@ -298,11 +298,11 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - DISPLAY: `"No Beneficial Owners available"`
 - ACTION: GO TO Step 3e
 
-**IF** `relatedParties.UBO.total` > 0 AND `relatedParties.UBO.nonPartiesList.length` = 0:
+**IF** `relatedParties.UBO.total` > 0 AND `relatedParties.UBO.nonParties` = 0:
 - DISPLAY: `"All Beneficial Owners included in screening"`
 - ACTION: GO TO Step 3e
 
-**IF** `relatedParties.UBO.total` > 0 AND `relatedParties.UBO.nonPartiesList.length` > 0:
+**IF** `relatedParties.UBO.total` > 0 AND `relatedParties.UBO.nonParties` > 0:
 - DISPLAY:
   Render Appendix M — Hierarchy display
     treeHierarchy: `{uboTreeHierarchy}`
