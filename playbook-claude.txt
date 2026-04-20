@@ -1001,7 +1001,16 @@ Relationship buckets are **non-exclusive** — a single entity can and should be
 
 ### Appendix M: Hierarchy Display
 
-Renders `{treeHierarchy}` as a recursively nested indented tree.
+Renders `{treeHierarchy}` as a recursively nested indented tree. Accepts any pre-built hierarchy — no knowledge of relationship type or data source is required.
+
+---
+
+#### Input
+
+| Field | Description |
+|---|---|
+| `{treeHierarchy}` | Pre-built nested node tree passed in by the calling step |
+| `{label}` | Caller-supplied label string (e.g. `Corporate tree parents`, `Beneficial owners`) |
 
 ---
 
@@ -1009,16 +1018,15 @@ Renders `{treeHierarchy}` as a recursively nested indented tree.
 
 ```json
 {
-  "name": "string",
   "externalId": "string",
+  "name": "string",
   "partyId": "string | null",
   "type": "client | party | non-party",
-  "parentExternalId": "string | null",
   "children": []
 }
 ```
 
-Children are nested inline — each node carries its own `children[]` array rather than being stored as a flat list. Build the tree by attaching each node to its parent before rendering.
+Children are nested inline — each node carries its own `children[]` array. Render the structure as-is.
 
 ---
 
@@ -1034,7 +1042,7 @@ Children are nested inline — each node carries its own `children[]` array rath
 
 #### Empty State
 
-If the root node has no children, render:
+If `{treeHierarchy}` is null, empty, or all root nodes have no children and no type, render:
 
 ```
 No {label} found.
@@ -1046,15 +1054,7 @@ Stop. Do not render a tree or summary line.
 
 #### Rendering
 
-Traverse `{treeHierarchy}` depth-first starting from the root node.
-The root node is the node whose `parentExternalId` is null or has no matching
-entry in the node map. Render each node before its children.
-Indent each child level 5 spaces relative to its parent.
-
-Each node's position in the tree is determined solely by the
-parent-child relationships in the data. Do not apply any assumption
-about which node type (client, party, non-party) appears at the top
-or bottom — position is a function of the data only.
+Traverse `{treeHierarchy}` recursively depth-first. Indent each level 5 spaces relative to its parent. No group labels or relationship type labels are ever rendered — nesting alone conveys hierarchy.
 
 ```
 {indicator}  {name} ({externalId})
@@ -1062,14 +1062,13 @@ or bottom — position is a function of the data only.
      {indicator}  {name} ({externalId})
           {indicator}  {name} ({externalId})
                {indicator}  {name} ({externalId})
-                    {indicator}  {name} ({externalId})
 ```
 
 ---
 
 #### Summary Line
 
-Render immediately below the tree:
+Render immediately below the tree. Use `{label}` as the entity noun:
 
 ```
 🔷 Client
