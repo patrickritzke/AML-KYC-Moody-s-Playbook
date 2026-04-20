@@ -1124,7 +1124,7 @@ Stop. Do not render a tree or summary line.
 
 #### Rendering
 
-Traverse `{treeHierarchy}` recursively depth-first. Indent each level 5 spaces relative to its parent. No group labels or relationship type labels are ever rendered — nesting alone conveys hierarchy.
+Traverse '{treeHierarchy}' recursively depth-first. Indent each level 5 spaces relative to its parent. Always wrap the entire tree output in a fenced code block (```) so indentation is preserved in rendering.
 
 ```
 {indicator}  {name} ({externalId})
