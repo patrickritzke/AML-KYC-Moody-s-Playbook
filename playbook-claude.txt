@@ -209,7 +209,10 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - ACTION: GO TO Step 3b
 
 **IF** `relatedParties.Parent.total` > 0 AND `relatedParties.Parent.nonParties` = 0:
-- DISPLAY: `"All Corporate Tree Parents included in screening"`
+- DISPLAY:
+  Render Appendix M — Hierarchy display
+    treeHierarchy: `{parentTreeHierarchy}`
+    label: `Corporate tree parents are all included in screening`
 - ACTION: GO TO Step 3b
 
 **IF** `relatedParties.Parent.total` > 0 AND `relatedParties.Parent.nonParties` > 0:
