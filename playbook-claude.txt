@@ -199,12 +199,10 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 #### Step 3a: Parent
 
 **Build `{treeHierarchy}`**
-- Create a node for the client: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", parentExternalId: null, children: [] }`
-- For each entry in `relatedParties.Parent.partiesList`: create a node `{ name, externalId, partyId, type: "party", parentExternalId, children: [] }`
-- For each entry in `relatedParties.Parent.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", parentExternalId, children: [] }`
-- Build a lookup map keyed by `externalId` across all nodes (including client)
-- For each non-root node, find its parent using `parentExternalId` and push it into that parent's `children[]`. If `parentExternalId` is null or not found in the map, attach to the root (GUO)
-- The root node is the entry with no matching parent in the map (i.e. the GUO)
+- Use `relatedParties.Parent.displayHierarchy` as the tree structure.
+- For each node in the hierarchy, enrich with `name`, `partyId`, and `type` by matching `externalId` against `partiesList` (type = `"party"`) and `nonPartiesList` (type = `"non-party"`).
+- The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`.
+- If a node's `externalId` cannot be matched to either list, skip it.
 
 **IF** `relatedParties.Parent.total` = 0:
 - DISPLAY: `"No Corporate Tree Parents available"`
@@ -231,12 +229,10 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 #### Step 3b: Subsidiary
 
 **Build `{treeHierarchy}`**
-- Create a node for the client: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", parentExternalId: null, children: [] }`
-- For each entry in `relatedParties.Subsidiary.partiesList`: create a node `{ name, externalId, partyId, type: "party", parentExternalId, children: [] }`
-- For each entry in `relatedParties.Subsidiary.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", parentExternalId, children: [] }`
-- Build a lookup map keyed by `externalId` across all nodes (including client)
-- For each non-root node, find its parent using `parentExternalId` and push it into that parent's `children[]`. If `parentExternalId` is null or not found in the map, attach directly to the client node
-- The root node is the client
+- Use `relatedParties.Subsidiary.displayHierarchy` as the tree structure.
+- For each node in the hierarchy, enrich with `name`, `partyId`, and `type` by matching `externalId` against `partiesList` (type = `"party"`) and `nonPartiesList` (type = `"non-party"`).
+- The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`.
+- If a node's `externalId` cannot be matched to either list, skip it.
 
 
 **IF** `relatedParties.Subsidiary.total` = 0:
@@ -294,12 +290,10 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 #### Step 3d: UBO
 
 **Build `{treeHierarchy}`**
-- Create a node for the client: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", parentExternalId: null, children: [] }`
-- For each entry in `relatedParties.UBO.partiesList`: create a node `{ name, externalId, partyId, type: "party", parentExternalId, children: [] }`
-- For each entry in `relatedParties.UBO.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", parentExternalId, children: [] }`
-- Build a lookup map keyed by `externalId` across all nodes (including client)
-- For each non-root node, find its parent using `parentExternalId` and push it into that parent's `children[]`. If `parentExternalId` is null or not found in the map, attach directly to the client node
-- The root node is the client
+- Use `relatedParties.UBO.displayHierarchy` as the tree structure.
+- For each node in the hierarchy, enrich with `name`, `partyId`, and `type` by matching `externalId` against `partiesList` (type = `"party"`) and `nonPartiesList` (type = `"non-party"`).
+- The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`.
+- If a node's `externalId` cannot be matched to either list, skip it.
 
 
 **IF** `relatedParties.UBO.total` = 0:
@@ -1052,7 +1046,15 @@ Stop. Do not render a tree or summary line.
 
 #### Rendering
 
-Traverse `{treeHierarchy}` recursively depth-first. Indent each level 5 spaces relative to its parent. No group labels are ever rendered — nesting alone conveys hierarchy.
+Traverse `{treeHierarchy}` depth-first starting from the root node.
+The root node is the node whose `parentExternalId` is null or has no matching
+entry in the node map. Render each node before its children.
+Indent each child level 5 spaces relative to its parent.
+
+Each node's position in the tree is determined solely by the
+parent-child relationships in the data. Do not apply any assumption
+about which node type (client, party, non-party) appears at the top
+or bottom — position is a function of the data only.
 
 ```
 {indicator}  {name} ({externalId})
