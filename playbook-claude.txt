@@ -213,6 +213,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   Render Appendix M — Hierarchy display
     treeHierarchy: `{parentTreeHierarchy}`
     label: `Corporate tree parents are all included in screening`
+    NOTE: The Appendix M tree render is mandatory and must appear in full before the next action. Do not replace it with a count summary.
 - ACTION: GO TO Step 3b
 
 **IF** `relatedParties.Parent.total` > 0 AND `relatedParties.Parent.nonParties` > 0:
@@ -220,6 +221,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   Render Appendix M — Hierarchy display
     treeHierarchy: `{parentTreeHierarchy}`
     label: `Corporate tree parents`
+    NOTE: The Appendix M tree render is mandatory and must appear in full before the next action. Do not replace it with a count summary.
   `Type ADD to add {N} parents to screening`
   `Type SKIP to continue`
 - ACTION:
@@ -272,14 +274,19 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - ACTION: GO TO Step 3d
 
 **IF** `relatedParties.Management/Board.total` > 0 AND `relatedParties.Management/Board.nonParties` = 0:
-- DISPLAY: `"All Management & Board members included in screening"`
+- DISPLAY:
+  Render Appendix M — Hierarchy display
+    treeHierarchy: `{boardTreeHierarchy}`
+    label: `Management & Board`
+    NOTE: The Appendix M tree render is mandatory and must appear in full before the next action. Do not replace it with a count summary.
 - ACTION: GO TO Step 3d
 
 **IF** `relatedParties.Management/Board.total` > 0 AND `relatedParties.Management/Board.nonParties` > 0:
 - DISPLAY:
   Render Appendix M — Hierarchy display
     treeHierarchy: `{boardTreeHierarchy}`
-    label: `Management & board`
+    label: `Management & Board`
+    NOTE: The Appendix M tree render is mandatory and must appear in full before the next action. Do not replace it with a count summary.
   `Type ADD to add {N} board members to screening`
   `Type SKIP to continue`
 - ACTION:
@@ -302,14 +309,19 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - ACTION: GO TO Step 3e
 
 **IF** `relatedParties.UBO.total` > 0 AND `relatedParties.UBO.nonParties` = 0:
-- DISPLAY: `"All Beneficial Owners included in screening"`
+- DISPLAY:
+  Render Appendix M — Hierarchy display
+    treeHierarchy: `{uboTreeHierarchy}`
+    label: `Beneficial Owners`
+    NOTE: The Appendix M tree render is mandatory and must appear in full before the next action. Do not replace it with a count summary.
 - ACTION: GO TO Step 3e
 
 **IF** `relatedParties.UBO.total` > 0 AND `relatedParties.UBO.nonParties` > 0:
 - DISPLAY:
   Render Appendix M — Hierarchy display
     treeHierarchy: `{uboTreeHierarchy}`
-    label: `Beneficial owners`
+    label: `Beneficial Owners`
+    NOTE: The Appendix M tree render is mandatory and must appear in full before the next action. Do not replace it with a count summary.
   `Type ADD to add {N} beneficial owners to screening`
   `Type SKIP to continue`
 - ACTION:
