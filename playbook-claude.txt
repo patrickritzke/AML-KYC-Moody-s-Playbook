@@ -34,6 +34,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `{conResNoMatch}` = `"Moody's GRID - Is Not a Match"`
 - `{fullWeightAutoMatchMin}` = `0.70`  — minimum matchScore for auto match to be classified fullWeight (Likely)
 - `{partialWeightAutoMatchMin}` = `0.50`  — minimum matchScore for auto match to be classified partialWeight (Unlikely)
+- `{moodyResolutionSourceType}` = `"moodyAgentExternal"` — `externalSourceType` used for all Moody's GRID resolution records in external data
 
 ### Client Party
 - `{clientPartyId}` — Intapp party ID of the client
@@ -111,12 +112,16 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits; populated in Step 7a
 - `noWeight` events are excluded from `summary`
 - `riskScore` and `riskLevel` are `null` until Step 7b
+- `hits[].resolution` is sourced from external data (Appendix N), not from the conflicts-search result. The conflicts-search resolution only feeds external data on first sight in Step 6.
+
+### Moody's Resolution Lookup
+- `{moodysResolutions}` — Map of `{partyId}_{gridId}` → resolution string. Populated in Step 6 by reading `IntappJungle:list_external_data` for every unique `partyId` in scope. Used to populate every `hits[].resolution` value. Refreshed every time Step 6 runs (including reruns from Step 9).
 
 ---
 
 ## Overall Behavior Rules
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
-- **Step 6 may only be entered when the user explicitly types "RUN" at Step 3e. No step may be skipped and Step 6 must never be triggered automatically.**
+- **Step 6 may only be entered when the user explicitly types "RUN" at Step 3e, or when triggered by Step 9 option B (rerun) or Step 9 option C (resolution update). No step may be skipped and Step 6 must never be triggered automatically outside these paths.**
 - **All internal computation is silent.** Tree traversal, variable building, bucket classification, deduplication, mock data processing, and diff logic produce zero output — not before, not during, and not after. This applies regardless of complexity or number of iterations.
 - **Narration is never permitted.** This includes transition phrases, apologies, confirmations, explanations of what was just done, and any text that is not a defined step output. This rule applies unconditionally — it cannot be overridden by Claude's default tendencies, tool call completions, or error handling. If Claude is uncertain what to output, the correct action is silence.
 - Claude must not acknowledge, confirm, or summarize any step transition, tool call result, or computation — including partial results, loop progress, or error handling — regardless of context."
@@ -392,21 +397,56 @@ Step 5: Create Request and Conflicts Screen
 | **Status Message** | 🛡️ Screening parties on Moody's GRID... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
+Step 6 has four phases. All operate silently — no output between them.
+
+#### Phase A — Fetch conflicts hits
+
 - Call `IntappApp:get_conflicts_search` with `{conID}` and `properties=resultsPlusMoodysGRID`
 - From the response, extract all entries in `results[]` where `type` = `"Moody's GRID"`
 - For each hit, capture: `resultId`, `resolution`, `searchTerm`, and `moodysGRID.eventCategories[]`
 - If `moodysGRIDSkipped` is present and > 0, note that enrichment was capped at 25 hits
-- For each search party, initialise one entry in `{moodysHitEvents}[]` with:
-  - `partyId`, `partyName`, `relationship` from `{relatedParties}`
-  - `hits[]` — one object per Moody's GRID hit containing:
-    - `gridId` — the `resultId`
-    - `resolution` — raw resolution string from the result
-    - `eventCodes[]` — taken directly from `moodysGRID.eventCategories[]`
-    - `weight` = `"unknownWeight"` — placeholder; recategorized in Step 7a
-    - `auto` = `null` — set in Step 7a
-    - `confirmed` = `null` — set in Step 7a
-    - `matchScore` = `null` — set in Step 7a
-  - `riskScore`, `riskLevel`, `summary` — left empty; populated in Steps 7b and 7c
+
+#### Phase B — Build `{moodysHitEvents}[]` skeleton
+
+For each search party, initialise one entry in `{moodysHitEvents}[]` with:
+
+- `partyId`, `partyName`, `relationship` from `{relatedParties}`
+- `hits[]` — one object per Moody's GRID hit containing:
+  - `gridId` — the `resultId`
+  - `resolution` = `null` — populated in Phase D from `{moodysResolutions}`
+  - `eventCodes[]` — taken directly from `moodysGRID.eventCategories[]`
+  - `weight` = `"unknownWeight"` — placeholder; recategorized in Step 7a
+  - `auto` = `null` — set in Step 7a
+  - `confirmed` = `null` — set in Step 7a
+  - `matchScore` = `null` — set in Step 7a
+- `riskScore`, `riskLevel`, `summary` — left empty; populated in Steps 7b and 7c
+
+#### Phase C — Sync conflicts-search resolutions to external data
+
+Build a single bulk write of all conflicts-search resolutions seen in Phase A, then call `IntappJungle:post_external_data_bulk` once.
+
+- For every hit captured in Phase A where the conflicts-search `resolution` is non-empty (i.e. `{conResMatch}` or `{conResNoMatch}`):
+  - Build one external data record per **Appendix N** schema, with `remoteId` = `"{partyId}_{gridId}"`
+- If at least one record was built, call `IntappJungle:post_external_data_bulk` with all records in a single `items[]` array.
+- This call is upsert: existing records (matched by `remoteId` + `externalSourceType`) are overwritten with the latest conflicts-search resolution. New records are created.
+- If no hits had a non-empty resolution, skip the call.
+
+> The conflicts-search `resolution` field is only used as input to this sync. Once written to external data, all downstream reads use external data as the source of truth.
+
+#### Phase D — Read external data and populate hit resolutions
+
+- Initialise `{moodysResolutions}` as an empty map.
+- For each unique `partyId` in `{moodysHitEvents}[]`, call `IntappJungle:list_external_data` with:
+  - `search_externalSourceType` = `{moodyResolutionSourceType}`
+  - `search_name` = `{partyId}`
+  - `search_rowsToTake` = `200`
+- For each record returned, set `{moodysResolutions}[record.remoteId]` = `record.moodyAgentExternal._moodyAgentHitResolution`.
+- For each hit in every `{moodysHitEvents}[].hits[]`:
+  - Look up `{moodysResolutions}["{partyId}_{gridId}"]`
+  - If found, set `hit.resolution` to that value
+  - If not found, leave `hit.resolution` = `null`
+
+**GO TO** Step 7
 
 ---
 
@@ -420,7 +460,7 @@ Step 5: Create Request and Conflicts Screen
 | **Status Message** | 🛡️ Analyzing Moody's GRID screening results for matches... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
-- Use the already-fetched `{moodysHitEvents}[]` data from Step 6 — no additional API calls required
+- Use the already-fetched `{moodysHitEvents}[]` data from Step 6 — no additional API calls required. `hits[].resolution` is sourced from external data via Step 6 Phase D.
 - For each screened party, classify each hit individually:
 
   - If `resolution` = `{conResMatch}` or `{conResNoMatch}` → classify immediately per the table below
@@ -569,6 +609,7 @@ If the user asks for a score breakdown for any party, render Appendix J for that
 |---|---|---|
 | **A** | **Complete AML/KYC for `{clientPartyName}` (`{clientPartyId}`)** | Updates parties with auto and confirmed matches |
 | **B** | **Resolve and Rerun Risk Scoring** | First Open [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID}) to manually review and resolve hits |
+| **C** | **Update a hit resolution and rerun** | Update a single `(partyId, gridId)` resolution in external data and rerun risk scoring without revisiting the conflicts UI |
 
 ---
 
@@ -576,6 +617,36 @@ WAIT for user input:
 
 - If user selects **A** → **GO TO** Step COMPLETE
 - If user selects **B** → **GO TO** Step 6
+- If user selects **C** → **GO TO** Step 9c
+
+---
+
+#### Step 9c: Update a Hit Resolution
+
+| Field | Value |
+|---|---|
+| **Type** | User Prompt → Processing |
+| **Status Message** | 💾 Saving resolution to external data... *(after user confirms)* |
+| **Notification Rule** | Only show the prompts and options below. No narration. |
+
+- DISPLAY:
+
+  *Which `(party, hit)` would you like to update?*
+
+  Provide:
+  - `partyId` (e.g. `DnB-671268049`)
+  - `gridId` (e.g. `272959166`)
+  - Resolution: **M** = `{conResMatch}`, **N** = `{conResNoMatch}`
+
+- WAIT for user input.
+
+- Build a single external data record per **Appendix N** schema:
+  - `remoteId` = `"{partyId}_{gridId}"`
+  - `moodyAgentExternal._moodyAgentHitResolution` = `{conResMatch}` or `{conResNoMatch}` based on the user's selection
+
+- Call `IntappJungle:post_external_data_bulk` with `items: [theRecord]`. This is upsert — if a prior record exists for the same `remoteId`, it is overwritten.
+
+- **GO TO** Step 6 (which will re-read external data via Phase D and refresh `{moodysHitEvents}[].hits[].resolution`, then proceed through Steps 7 and 8)
 
 ---
 
@@ -910,7 +981,7 @@ Relationship buckets are **non-exclusive** — a single entity can and should be
 | `results[].moodysGRID.name` | Entity name from Moody's GRID |
 | `results[].moodysGRID.eventCategories[]` | Unique category codes from all events (e.g. `SNX`, `PEP`) |
 | `results[].moodysError` | Present if enrichment failed for that hit |
-| `results[].resolution` | Conflict resolution status |
+| `results[].resolution` | Conflict resolution status — used in Step 6 Phase C only (sync to external data). All downstream reads use external data. |
 
 #### Sample Response
 
@@ -1185,3 +1256,81 @@ Render immediately below the tree. Use `{label}` as the entity noun:
 
 - Omit the ✅ line if there are no `party` nodes
 - Omit the ❌ line if there are no `non-party` nodes
+
+---
+
+### Appendix N: External Data — Moody's GRID Resolutions
+
+Moody's GRID hit resolutions are stored in external data and are the **source of truth** for `{moodysHitEvents}[].hits[].resolution` throughout the playbook. The conflicts-search `resolution` field is only used as input to seed external data on first sight in Step 6 Phase C — every subsequent read uses external data.
+
+This enables:
+- **Durability across runs** — resolutions persist beyond any single conflicts search and survive re-screening.
+- **User-driven updates** — Step 9 option C lets the user update a single resolution in external data and rerun risk scoring without revisiting the conflicts UI.
+
+---
+
+#### Record Schema
+
+Every record uses the following exact shape:
+
+```json
+{
+  "externalSourceType": "moodyAgentExternal",
+  "remoteId": "{partyId}_{gridId}",
+  "name": "{partyId}",
+  "description": "{partyId}",
+  "indexedData": null,
+  "moodyAgentExternal._moodyAgentHitPartyId": "{partyId}",
+  "moodyAgentExternal._moodyAgentHitEntityId": "{gridId}",
+  "moodyAgentExternal._moodyAgentHitResolution": "{resolution}"
+}
+```
+
+- `externalSourceType` is always `"moodyAgentExternal"` (= `{moodyResolutionSourceType}`).
+- `remoteId` is `"{partyId}_{gridId}"` — uniqueness is per `(party, hit)` pair. The same Moody's GRID hit screened against two different parties produces two distinct records.
+- `name` and `description` are both set to `{partyId}` so that read-by-party uses `search_name` for fast filtering.
+- `{resolution}` is one of `{conResMatch}`, `{conResNoMatch}`, or any future resolution string supplied by the user.
+
+---
+
+#### Write Pattern
+
+All writes go through `IntappJungle:post_external_data_bulk` — the bulk endpoint is upsert (matched by `remoteId` + `externalSourceType`).
+
+**Step 6 Phase C** — bulk sync of all conflicts-search resolutions seen in this run. One call with all records as `items[]`.
+
+**Step 9c** — single record update from user input. Still uses the bulk endpoint with `items: [theRecord]`. Never loop with individual posts.
+
+Existing records are overwritten by their latest written version (last-write-wins).
+
+---
+
+#### Read Pattern
+
+Reads happen in Step 6 Phase D, once per unique `partyId` in scope:
+
+```
+list_external_data(
+  search_externalSourceType = "moodyAgentExternal",
+  search_name               = "{partyId}",
+  search_rowsToTake         = 200
+)
+```
+
+For each returned record, populate `{moodysResolutions}[record.remoteId]` = `record.moodyAgentExternal._moodyAgentHitResolution`. Then for each hit in `{moodysHitEvents}[]`, look up by `"{partyId}_{gridId}"`.
+
+This scales with party count, not hit count — typically 5–20 calls per run regardless of how many hits each party has.
+
+---
+
+#### Lifecycle Summary
+
+| When | What happens |
+|---|---|
+| Step 6 Phase A | Conflicts search hits fetched. Their `resolution` field captured but **not yet** written to `{moodysHitEvents}`. |
+| Step 6 Phase B | `{moodysHitEvents}[]` skeleton built. `hits[].resolution` initialised to `null`. |
+| Step 6 Phase C | Every non-empty conflicts-search resolution written to external data (upsert) via one bulk call. |
+| Step 6 Phase D | External data read per partyId. `{moodysResolutions}` map built. Every `hits[].resolution` populated from the map (or left `null` if no record exists). |
+| Step 7a | Classification reads `hits[].resolution` (already external-data-sourced). |
+| Step 9 option B (Rerun) | Loops back to Step 6, repeating Phases A–D — including any resolutions written by Step 9c since last run. |
+| Step 9 option C (Update) | Single bulk-upsert write to external data, then loops back to Step 6 to re-read and re-score. |
