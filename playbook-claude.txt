@@ -143,7 +143,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | **Status Message** | 🔍 Looking up [Client Name]... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
-- Search the system for existing party record by party name with `intapp:search_parties`
+- Search the system for existing party record by party name with `intappCommon:search_parties`
 - If found:
   - Set `{clientPartyId}`, `{clientPartyName}`, `{clientPartyExternalId}`, `{clientPartyExternalIdProvider}`
   - **GO TO** Step 2
@@ -157,7 +157,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | **Status Message** | 🔍 Finding parties due for AML/KYC review... |
 | **Notification Rule** | Only show status, prompt, and options. Do not show any commentary or narration |
 
-- Call `intapp:search_parties` with:
+- Call `intappCommon:search_parties` with:
   - `filter._moodyAgentNextFrom` = 90 days before today (ISO 8601, e.g. `2026-01-15T00:00:00Z`)
   - `filter._moodyAgentNextTo` = today's date (ISO 8601, e.g. `2026-04-15T23:59:59Z`)
 - If the call fails or returns no results → **GO TO** Step END
@@ -181,7 +181,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | **Status Message** | 🌳 Finding corporate structure... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
-- Call `intapp:get_corp_structure_party_relationships` with:
+- Call `IntappJungle:get_corp_structure_party_relationships` with:
   - `party_id` = `{clientPartyId}`
   - `include_non_parties` = `true`
 - From the response, capture:
@@ -226,7 +226,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   `Type SKIP to continue`
 - ACTION:
   - WAIT for user input
-    - `ADD` → create parties via `intapp:create_party` → GO TO Step 3b
+    - `ADD` → create parties via `intappCommon:create_party` → GO TO Step 3b
     - `SKIP` → GO TO Step 3b
 
 ---
@@ -256,7 +256,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   `Type SKIP to continue`
 - ACTION:
   - WAIT for user input
-    - `ADD` → create parties via `intapp:create_party` → GO TO Step 3c
+    - `ADD` → create parties via `intappCommon:create_party` → GO TO Step 3c
     - `SKIP` → GO TO Step 3c
 
 ---
@@ -291,7 +291,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   `Type SKIP to continue`
 - ACTION:
   - WAIT for user input
-    - `ADD` → create parties via `intapp:create_party` → GO TO Step 3d
+    - `ADD` → create parties via `intappCommon:create_party` → GO TO Step 3d
     - `SKIP` → GO TO Step 3d
 
 ---
@@ -326,7 +326,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   `Type SKIP to continue`
 - ACTION:
   - WAIT for user input
-    - `ADD` → create parties via `intapp:create_party` → GO TO Step 3e
+    - `ADD` → create parties via `intappCommon:create_party` → GO TO Step 3e
     - `SKIP` → GO TO Step 3e
 ---
 
@@ -338,7 +338,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | **Status Message** | None. |
 | **Notification Rule** | Only show display and prompt. Do not show any commentary or narration. |
 
-- If any parties were created across Steps 3a–3d → re-call `intapp:get_corp_structure_party_relationships` with `include_non_parties` = `false`, update `{relatedParties}`
+- If any parties were created across Steps 3a–3d → re-call `IntappJungle:get_corp_structure_party_relationships` with `include_non_parties` = `false`, update `{relatedParties}`
 - DISPLAY:
 
 *Type `RUN` to proceed to Moody's GRID screening.*
@@ -372,14 +372,14 @@ Step 5: Create Request and Conflicts Screen
 | **Status Message** | 🛡️ Creating request and Moody's GRID screen... |
 | **Notification Rule** | Status message only. Do not show commentary or narration. |
 
-- Create a request with `intapp:create_request`
+- Create a request with `IntappApp:create_request`
   - See Appendix D for API body/XML details
   - Set `{reqID}` from response
-- Create a conflicts search linked to the request with `intapp:create_conflicts_search`
+- Create a conflicts search linked to the request with `IntappApp:create_conflict_search`
   - See Appendix E for API body details
   - Link to request with `{reqID}`
   - Set `{conID}` from response
-- Run conflicts search with `intapp:run_conflicts_search` using `{conID}`
+- Run conflicts search with `IntappApp:run_conflict_search` using `{conID}`
 
 ---
 
@@ -391,7 +391,7 @@ Step 5: Create Request and Conflicts Screen
 | **Status Message** | 🛡️ Screening parties on Moody's GRID... |
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
-- Call `intapp:get_conflict_search_results` with `{conID}` and `properties=resultsPlusMoodysGRID`
+- Call `IntappApp:get_conflicts_search` with `{conID}` and `properties=resultsPlusMoodysGRID`
 - From the response, extract all entries in `results[]` where `type` = `"Moody's GRID"`
 - For each hit, capture: `resultId`, `resolution`, `searchTerm`, and `moodysGRID.eventCategories[]`
 - If `moodysGRIDSkipped` is present and > 0, note that enrichment was capped at 25 hits
@@ -588,7 +588,7 @@ WAIT for user input:
 
 For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
 
-- Call `intapp:get_party` with `partyId` to retrieve existing `_moodyAgentRuns` rows
+- Call `intappCommon:get_party` with `partyId` to retrieve existing `_moodyAgentRuns` rows
 
 - **Unwrap the response** before accessing fields. The tool result is returned as a content block, not a plain object. Always unwrap as follows:
 
@@ -646,7 +646,7 @@ xml_runs_client = result._moodyAgentRunsClient  ?? ""
 | `reqID` | `{ "stringValue": "{reqID}" }` |
 | `riskScoreOverall` | `{ "stringValue": "{overallRiskLevel} ({overallRiskScore})" }` — use `"None"` if `overallRiskScore` = 0 or null |
 
-- Call `intapp:update_party` with `partyId` and the appropriate body. Expect `204 No Content` on success. On failure, note the error and continue to next party — do not abort.
+- Call `intappCommon:update_party` with `partyId` and the appropriate body. Expect `204 No Content` on success. On failure, note the error and continue to next party — do not abort.
   - If `partyId` = `{clientPartyId}`: `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] }, "_moodyAgentRunsClient": { "rows": [...existingRunsClientRows, newRunsClientRow] }, "_moodyAgentNext": "<6 months from today at midnight UTC, e.g. 2026-10-15T00:00:00Z>" }`
   - All other parties: `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`
 
@@ -738,7 +738,7 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 
 ---
 
-### Appendix D: `intapp:create_request` API Details
+### Appendix D: `IntappApp:create_request` API Details
 
 #### API Body
 ```json
@@ -805,7 +805,7 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 
 ---
 
-### Appendix E: `intapp:create_conflicts_search` API Details
+### Appendix E: `IntappApp:create_conflict_search` API Details
 
 #### API Body
 
@@ -833,7 +833,7 @@ Relationship buckets are **non-exclusive** — a single entity can and should be
 
 **Example:** The GUO is always also a Parent. If it additionally appears in the shareholders list, it holds three relationships at once: `["GUO", "Parent", "Shareholder"]`. It appears as a single row in `{relatedPartiesTable[]}` with all three labels — never as duplicate rows, and never counted more than once toward any bucket's `total`.
 
-#### `intapp:get_corp_structure_party_relationships` tool relatedParties Schema
+#### `IntappJungle:get_corp_structure_party_relationships` tool relatedParties Schema
 
 ```json
 {
