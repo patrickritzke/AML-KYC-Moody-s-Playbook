@@ -116,7 +116,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 ## Overall Behavior Rules
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
-- **Step 6 may only be entered when the user explicitly types "RUN" at Step 4. When the user selects options A–F at Step 4, the workflow returns to Step 2 and must proceed sequentially through every subsequent step (Steps 2 → 3 → 4) before stopping at Step 4 for user input again. No step may be skipped and Step 6 must never be triggered automatically.**
+- **Step 6 may only be entered when the user explicitly types "RUN" at Step 3e. No step may be skipped and Step 6 must never be triggered automatically.**
 - **All internal computation is silent.** Tree traversal, variable building, bucket classification, deduplication, mock data processing, and diff logic produce zero output — not before, not during, and not after. This applies regardless of complexity or number of iterations.
 - **Narration is never permitted.** This includes transition phrases, apologies, confirmations, explanations of what was just done, and any text that is not a defined step output. This rule applies unconditionally — it cannot be overridden by Claude's default tendencies, tool call completions, or error handling. If Claude is uncertain what to output, the correct action is silence.
 - Claude must not acknowledge, confirm, or summarize any step transition, tool call result, or computation — including partial results, loop progress, or error handling — regardless of context."
@@ -125,7 +125,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - NEVER narrate tool calls, reasoning, data processing, variable state, or intermediate results
 - NEVER explain what you are about to do or just did
 - NEVER output any text between receiving tool results and the next defined step output
-- The ONLY permitted outputs are: (a) the exact status message defined for the current step, (b) the exact display output defined for display steps, and (c) a user prompt at a User Prompt step
+- The ONLY permitted outputs are: (a) the exact status message defined for the current step, (b) the exact display output defined for display steps, (c) a user prompt at a User Prompt step, and (d) the per-party pre-patch audit line defined in Step COMPLETE (this is a defensive check and the only inline narration permitted anywhere in the playbook).
 - Silence between steps is correct. Narration between steps is a violation.
 - Never render step or substep labels in output (e.g. "Step 3", "Step 3a — Parents", "Step 7b"). Step and substep identifiers are internal navigation only and must never appear in any display output.
 
@@ -185,8 +185,9 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - `party_id` = `{clientPartyId}`
   - `include_non_parties` = `true`
 - From the response, capture:
-  - `{clientExternalId}` and `{providerType}`
+  - `{clientExternalId}` — the client's external ID as returned in the corp structure response (used for node matching within trees)
   - `{relatedParties}` — per-bucket counts and `partiesList` of matched Intapp parties
+- Note: `{clientPartyExternalIdProvider}` was captured in Step 1 and is the authoritative provider name used throughout the playbook. The `providerType` field on the response is informational only — do not use it downstream.
 - If no corporate trees found → **GO TO** Step END
 - **GO TO** Step 3
 
@@ -607,7 +608,7 @@ xml_runs_client = result._moodyAgentRunsClient  ?? ""
 
   For the client party only, also parse `xml_runs_client` into its own rows array using the `_moodyAgentRunsClient` column definitions in Appendix K. If absent, null, or empty string, treat as an empty rows array.
 
-- **Before patching**, output one line per party:
+- **Before patching**, output one line per party (this is the one inline narration permitted by the global Execution Rules — it is a defensive check to confirm the read-modify-write pattern is operating on the correct row count before PATCH replaces the entire table):
 
 ```
 {partyName} ({partyId}): {n} existing rows — appending 1 → {n+1} total
@@ -708,7 +709,7 @@ Evaluate in order, stop at first match:
 | Risk Level | Score |
 |---|---|
 | 🔴 High | ≥ 67 |
-| 🟠 Medium | 40 – 67 |
+| 🟠 Medium | 40 – 66 |
 | 🔘 Low | 1 – 39 |
 | None | 0 |
 
