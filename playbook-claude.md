@@ -131,9 +131,49 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - NEVER narrate tool calls, reasoning, data processing, variable state, or intermediate results
 - NEVER explain what you are about to do or just did
 - NEVER output any text between receiving tool results and the next defined step output
-- The ONLY permitted outputs are: (a) the exact status message defined for the current step, (b) the exact display output defined for display steps, and (c) a user prompt at a User Prompt step.
+- The ONLY permitted outputs are: (a) the exact Progress Header + Status block defined for the current step, (b) the exact display output defined for display steps, and (c) a user prompt at a User Prompt step.
 - Silence between steps is correct. Narration between steps is a violation.
 - Never render step or substep labels in output (e.g. "Step 3", "Step 3a — Parents", "Step 7b"). Step and substep identifiers are internal navigation only and must never appear in any display output.
+
+---
+
+## Progress Display Rules
+
+Every step in the playbook defines two display fields in its metadata table:
+
+- **Progress Header** — a single-line phase indicator that shows where the user is in the overall workflow. The current phase is bolded; all other phases render as plain text.
+- **Status** — a one-line italic description of what is happening in the current step. No icon, no prefix, no `Status:` label.
+
+### Phases
+
+The Progress Header always renders all five phases in this exact order, separated by ` › `:
+
+`🔍 Client › 🌳 Corp Structure › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete`
+
+### Rendering rule
+
+Every output Claude produces during the playbook — every status message, every display, every prompt — begins with the current step's Progress Header on line 1 and Status on line 2, followed by a blank line, then the step's defined content (display, prompt, or nothing more).
+
+```
+🔍 Client › 🌳 **Corp Structure** › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete
+*Finding corporate structure...*
+
+{step content here, if any}
+```
+
+### Special cases
+
+- **Pure processing steps** (no display output) still render the Progress Header + Status block — that block IS the output for that step. Nothing else follows.
+- **Step END** does not render the Progress Header. It is a terminal halt state outside the workflow.
+- **Step COMPLETE** renders the Progress Header with **Complete** bolded in the final completion display.
+- **Step 9 alternate Status** — when Step 9 is processing the user's `Match:` / `No Match:` resolutions and writing to external data, the Status line changes to `*Saving resolutions to external data...*` for that single output, then the next step (Step 6 loop) takes over with its own Status.
+
+### What never appears
+
+- No `Status:` label, `Progress:` label, or any field name in the output
+- No emoji prefix on the Status line (icons live only in the Progress Header)
+- No horizontal rule between header and content unless the step's defined content explicitly includes one
+- No narration explaining the header
 
 ---
 
@@ -146,8 +186,9 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 🔍 Looking up [Client Name]... |
-| **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
+| **Progress Header** | 🔍 **Client** › 🌳 Corp Structure › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete |
+| **Status** | *Looking up [Client Name]...* |
+| **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 - Search the system for existing party record by party name with `intappCommon:search_parties`
 - If found:
@@ -162,8 +203,9 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | Field | Value |
 |---|---|
 | **Type** | Analysis and User Prompt |
-| **Status Message** | 🔍 Finding parties due for AML/KYC review... |
-| **Notification Rule** | Only show status, prompt, and options. Do not show any commentary or narration |
+| **Progress Header** | 🔍 **Client** › 🌳 Corp Structure › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete |
+| **Status** | *Finding parties due for AML/KYC review...* |
+| **Notification Rule** | Only show the Progress Header + Status block, the prompt, and the options. Do not show any commentary or narration. |
 
 - Call `intappCommon:search_parties` with:
   - `filter._moodyAgentNextFrom` = 90 days before today (ISO 8601, e.g. `2026-01-15T00:00:00Z`)
@@ -188,8 +230,9 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 🌳 Finding corporate structure... |
-| **Notification Rule** | Zero output permitted during this step except the status message above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
+| **Progress Header** | 🔍 Client › 🌳 **Corp Structure** › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete |
+| **Status** | *Finding corporate structure...* |
+| **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 - Call `IntappJungle:get_corp_structure_party_relationships` with:
   - `party_id` = `{clientPartyId}`
@@ -210,6 +253,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 ---
 
 #### Step 3a: Parent
+
+| Field | Value |
+|---|---|
+| **Type** | Display / Prompt |
+| **Progress Header** | 🔍 Client › 🌳 **Corp Structure** › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete |
+| **Status** | *Reviewing parents* |
+| **Notification Rule** | Only show the Progress Header + Status block followed by the defined display/prompt. No commentary, no narration. |
 
 **Build `{parentTreeHierarchy}`**
 - Use `relatedParties.Parent.displayHierarchy` as the tree structure.
@@ -248,6 +298,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 #### Step 3b: Subsidiary
 
+| Field | Value |
+|---|---|
+| **Type** | Display / Prompt |
+| **Progress Header** | 🔍 Client › 🌳 **Corp Structure** › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete |
+| **Status** | *Reviewing subsidiaries* |
+| **Notification Rule** | Only show the Progress Header + Status block followed by the defined display/prompt. No commentary, no narration. |
+
 **Build `{subsidiaryTreeHierarchy}`**
 - Use `relatedParties.Subsidiary.displayHierarchy` as the tree structure.
 - For each node in the hierarchy, enrich with `name`, `partyId`, and `type` by matching `externalId` against `partiesList` (type = `"party"`) and `nonPartiesList` (type = `"non-party"`).
@@ -279,6 +336,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 ---
 
 #### Step 3c: Management & Board
+
+| Field | Value |
+|---|---|
+| **Type** | Display / Prompt |
+| **Progress Header** | 🔍 Client › 🌳 **Corp Structure** › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete |
+| **Status** | *Reviewing management & board* |
+| **Notification Rule** | Only show the Progress Header + Status block followed by the defined display/prompt. No commentary, no narration. |
 
 **Build `{boardTreeHierarchy}`**
 - Root node: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", children: [] }`
@@ -317,6 +381,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 ---
 
 #### Step 3d: UBO
+
+| Field | Value |
+|---|---|
+| **Type** | Display / Prompt |
+| **Progress Header** | 🔍 Client › 🌳 **Corp Structure** › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete |
+| **Status** | *Reviewing beneficial owners* |
+| **Notification Rule** | Only show the Progress Header + Status block followed by the defined display/prompt. No commentary, no narration. |
 
 **Build `{uboTreeHierarchy}`**
 - Use `relatedParties.UBO.displayHierarchy` as the tree structure.
@@ -358,8 +429,9 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 | Field | Value |
 |---|---|
 | **Type** | Prompt |
-| **Status Message** | None. |
-| **Notification Rule** | Only show display and prompt. Do not show any commentary or narration. |
+| **Progress Header** | 🔍 Client › 🌳 **Corp Structure** › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete |
+| **Status** | *Confirming scope* |
+| **Notification Rule** | Only show the Progress Header + Status block followed by the prompt. Do not show any commentary or narration. |
 
 - If any parties were created across Steps 3a–3d → re-call `IntappJungle:get_corp_structure_party_relationships` with `include_non_parties` = `false`, update `{relatedParties}`
 - DISPLAY:
@@ -377,8 +449,9 @@ WAIT for user input:
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | *(none — processing step)* |
-| **Notification Rule** |  Do not show commentary or narration. |
+| **Progress Header** | 🔍 Client › 🌳 **Corp Structure** › 🛡️ Moody's Screening › 📊 Risk Score › ✅ Complete |
+| **Status** | *Merging relationships* |
+| **Notification Rule** | Only the Progress Header + Status block. Do not show commentary or narration. |
 
 - Build the table from `{relatedParties}`: iterate each bucket (GUO, Parent, Subsidiary, Sibling, Management/Board, Shareholder, UBO), collect all entries from each `partiesList`, group by `partyId`, and merge relationship labels for any party that appears in multiple buckets.
   - See **Appendix F** for `{relatedParties}` full schema.
@@ -394,8 +467,9 @@ Step 5: Create Request and Conflicts Screen
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 🛡️ Creating request and Moody's GRID screen... |
-| **Notification Rule** | Status message only. Do not show commentary or narration. |
+| **Progress Header** | 🔍 Client › 🌳 Corp Structure › 🛡️ **Moody's Screening** › 📊 Risk Score › ✅ Complete |
+| **Status** | *Creating request and Moody's GRID screen...* |
+| **Notification Rule** | Progress Header + Status block only. Do not show commentary or narration. |
 
 - Create a request with `IntappApp:create_request`
   - See Appendix D for API body/XML details
@@ -415,8 +489,9 @@ Step 5: Create Request and Conflicts Screen
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 🛡️ Screening parties on Moody's GRID... |
-| **Notification Rule** | Zero output permitted during this step except the status message above. |
+| **Progress Header** | 🔍 Client › 🌳 Corp Structure › 🛡️ **Moody's Screening** › 📊 Risk Score › ✅ Complete |
+| **Status** | *Screening parties on Moody's GRID...* |
+| **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. |
 
 Step 6 has four phases. All operate silently — no output between them.
 
@@ -482,8 +557,9 @@ Build a single bulk write of all conflicts-search resolutions seen in Phase A, t
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 🛡️ Analyzing Moody's GRID screening results for matches... |
-| **Notification Rule** | Zero output permitted during this step except the status message above. |
+| **Progress Header** | 🔍 Client › 🌳 Corp Structure › 🛡️ **Moody's Screening** › 📊 Risk Score › ✅ Complete |
+| **Status** | *Analyzing Moody's GRID screening results for matches...* |
+| **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. |
 
 - Use the already-fetched `{moodysHitEvents}[]` data from Step 6 — no additional API calls required. `hits[].resolution` is sourced from external data via Step 6 Phase D.
 - For each screened party, classify each hit individually:
@@ -534,8 +610,9 @@ Total hits per party must equal: fullWeight hits (auto + confirmed) + partialWei
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 📊 Calculating client and corporate structure relationship risk scores... |
-| **Notification Rule** | Zero output permitted during this step except the status message above. |
+| **Progress Header** | 🔍 Client › 🌳 Corp Structure › 🛡️ Moody's Screening › 📊 **Risk Score** › ✅ Complete |
+| **Status** | *Calculating client and corporate structure relationship risk scores...* |
+| **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. |
 
 For each entry in `{moodysHitEvents}[]`, apply the scoring rules defined in **Appendix B** in full, in order. Set `riskScore` and `riskLevel` on each entry.
 
@@ -548,8 +625,9 @@ For each entry in `{moodysHitEvents}[]`, apply the scoring rules defined in **Ap
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Status Message** | 📊 Calculating overall risk score... |
-| **Notification Rule** | Zero output permitted during this step except the status message above. |
+| **Progress Header** | 🔍 Client › 🌳 Corp Structure › 🛡️ Moody's Screening › 📊 **Risk Score** › ✅ Complete |
+| **Status** | *Calculating overall risk score...* |
+| **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. |
 
 Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvents}[]`. Set `{overallRiskScore}` and `{overallRiskLevel}`.
 
@@ -562,8 +640,9 @@ Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvent
 | Field | Value |
 |---|---|
 | **Type** | Display |
-| **Status Message** | *(none — display output is the communication)* |
-| **Notification Rule** | Return ONLY the display specified below. Do not add commentary, preamble, or narration of any kind. |
+| **Progress Header** | 🔍 Client › 🌳 Corp Structure › 🛡️ Moody's Screening › 📊 **Risk Score** › ✅ Complete |
+| **Status** | *Reviewing screening results* |
+| **Notification Rule** | Return ONLY the Progress Header + Status block followed by the display specified below. Do not add commentary, preamble, or narration of any kind. |
 
 #### Column Assignment (Silent)
 
@@ -640,8 +719,9 @@ WAIT for user input:
 | Field | Value |
 |---|---|
 | **Type** | Display → User Prompt |
-| **Status Message** | *(none — display output is the communication)* |
-| **Notification Rule** | Return ONLY the Appendix J render and the prompt below. No commentary, no preamble, no narration of any kind. |
+| **Progress Header** | 🔍 Client › 🌳 Corp Structure › 🛡️ Moody's Screening › 📊 **Risk Score** › ✅ Complete |
+| **Status** | *Resolving hits for {partyName}* |
+| **Notification Rule** | Return ONLY the Progress Header + Status block followed by the Appendix J render and the prompt below. No commentary, no preamble, no narration of any kind. |
 
 Entered from Step 8 with a single `{partyId}` selected by the user. Step 9 only displays the selected party's hits and collects resolution updates — it does **not** mutate any playbook variables. The external data write happens first, then control returns to Step 6 which re-reads external data and rebuilds `{moodysHitEvents}[]` from scratch.
 
@@ -688,7 +768,8 @@ After the table, display:
 
 | Field | Value |
 |---|---|
-| **Status Message** | 💾 Saving resolutions to external data... |
+| **Progress Header** | 🔍 Client › 🌳 Corp Structure › 🛡️ Moody's Screening › 📊 **Risk Score** › ✅ Complete |
+| **Status** | *Saving resolutions to external data...* |
 
 - Parse both lines into two letter lists. Each letter must map back to a hit in the rendered table for `{partyId}`. Reject any letter not present in the table.
 - Build one external data record per named hit per **Appendix N** schema:
@@ -710,8 +791,9 @@ After the table, display:
 | Field | Value |
 |---|---|
 | **Type** | Processing → Display |
-| **Status Message** | 💾 Updating party profiles with AML/KYC results... |
-| **Notification Rule** | Zero output permitted except the status message and the final completion table. No commentary between operations, no transition phrases, no confirmation of tool calls. |
+| **Progress Header** | 🔍 Client › 🌳 Corp Structure › 🛡️ Moody's Screening › 📊 Risk Score › ✅ **Complete** |
+| **Status** | *Updating party profiles with AML/KYC results...* |
+| **Notification Rule** | Zero output permitted except the Progress Header + Status block during processing, then the same Progress Header + Status block followed by the final completion table after the call returns. No commentary between operations, no transition phrases, no confirmation of tool calls. |
 
 Build a single `updates[]` array — one entry per unique `partyId` in `{moodysHitEvents}[]` (including the client) — then make **one call** to `IntappJungle:append_party_table_rows`. The tool fetches each party, appends the supplied `<Row>` XML to the named table field, and PATCHes only the changed fields. All party updates run in parallel internally — no manual fetch, parse, or merge required, and unrelated party fields are untouched.
 
@@ -839,7 +921,8 @@ Playbook completed.
 | Field | Value |
 |---|---|
 | **Type** | Display |
-| **Status Message** | *(none)* |
+| **Progress Header** | *(none — Step END is a terminal halt outside the workflow and does not render the progress indicator)* |
+| **Status** | *(none)* |
 | **Notification Rule** | Zero output permitted except the defined display output. |
 
 Playbook ended but not completed.
