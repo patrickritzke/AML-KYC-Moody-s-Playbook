@@ -125,6 +125,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - **All internal computation is silent.** Tree traversal, variable building, bucket classification, deduplication, mock data processing, and diff logic produce zero output — not before, not during, and not after. This applies regardless of complexity or number of iterations.
 - **Narration is never permitted.** This includes transition phrases, apologies, confirmations, explanations of what was just done, and any text that is not a defined step output. This rule applies unconditionally — it cannot be overridden by Claude's default tendencies, tool call completions, or error handling. If Claude is uncertain what to output, the correct action is silence.
 - Claude must not acknowledge, confirm, or summarize any step transition, tool call result, or computation — including partial results, loop progress, or error handling — regardless of context."
+- **Exit checks are silent.** Each step ends with one or more `**Exit check:**` invariants. Verify them internally before proceeding. If an invariant fails, halt the playbook and produce no output other than the verbatim halt message: `⚠️ Exit check failed: <reason>`. Never narrate that an exit check passed, never list the invariants, never restate them — they are an internal gate, not a display element.
 
 ## Execution Rules (Non-Negotiable)
 - NEVER narrate tool calls, reasoning, data processing, variable state, or intermediate results
@@ -154,6 +155,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - **GO TO** Step 2
 - If not found or no party was input → **GO TO** Step 1b
 
+**Exit check:** `{clientPartyId}` and `{clientPartyName}` are non-null before exiting to Step 2.
+
 #### Step 1b: Suggest Party
 
 | Field | Value |
@@ -176,6 +179,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - Set `{clientPartyId}`, `{clientPartyName}`, `{clientPartyExternalId}`, `{clientPartyExternalIdProvider}` from the selected result
   - **GO TO** Step 2
 
+**Exit check:** `{clientPartyId}` and `{clientPartyName}` are non-null before exiting to Step 2.
+
 ---
 
 ### Step 2: Identify Party Corporate Structure Relationships
@@ -196,6 +201,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - If no corporate trees found → **GO TO** Step END
 - **GO TO** Step 3
 
+**Exit check:** `{clientPartyId}` does not appear as an entry in any bucket's `partiesList` or `nonPartiesList`. The client is the subject of the screen, never a relationship to itself.
+
 ---
 
 ### Step 3: Review Corporate Structure Relationships
@@ -207,7 +214,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **Build `{parentTreeHierarchy}`**
 - Use `relatedParties.Parent.displayHierarchy` as the tree structure.
 - For each node in the hierarchy, enrich with `name`, `partyId`, and `type` by matching `externalId` against `partiesList` (type = `"party"`) and `nonPartiesList` (type = `"non-party"`).
-- The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`.
+- The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`. The client appears in the hierarchy for spatial context only and is **never** counted in any bucket count, never added to any `searchTerms`, and never added to any grid row downstream.
 - If a node's `externalId` cannot be matched to either list, skip it.
 
 **IF** `relatedParties.Parent.total` = 0:
@@ -235,6 +242,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
     - `ADD` → create all non-party parents in a single bulk `intappCommon:create_party` call (pass the full array as `body`) → GO TO Step 3b
     - `SKIP` → GO TO Step 3b
 
+**Exit check:** `relatedParties.Parent.total` = `relatedParties.Parent.parties` + `relatedParties.Parent.nonParties`. The client `partyId` is not in `partiesList` and the client `externalId` is not in `nonPartiesList` for this bucket.
+
 ---
 
 #### Step 3b: Subsidiary
@@ -242,7 +251,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **Build `{subsidiaryTreeHierarchy}`**
 - Use `relatedParties.Subsidiary.displayHierarchy` as the tree structure.
 - For each node in the hierarchy, enrich with `name`, `partyId`, and `type` by matching `externalId` against `partiesList` (type = `"party"`) and `nonPartiesList` (type = `"non-party"`).
-- The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`.
+- The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`. The client appears in the hierarchy for spatial context only and is **never** counted in any bucket count, never added to any `searchTerms`, and never added to any grid row downstream.
 - If a node's `externalId` cannot be matched to either list, skip it.
 
 **IF** `relatedParties.Subsidiary.total` = 0:
@@ -265,6 +274,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
     - `ADD` → create all non-party subsidiaries in a single bulk `intappCommon:create_party` call (pass the full array as `body`) → GO TO Step 3c
     - `SKIP` → GO TO Step 3c
 
+**Exit check:** `relatedParties.Subsidiary.total` = `relatedParties.Subsidiary.parties` + `relatedParties.Subsidiary.nonParties`. The client `partyId` is not in `partiesList` and the client `externalId` is not in `nonPartiesList` for this bucket.
+
 ---
 
 #### Step 3c: Management & Board
@@ -273,6 +284,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - Root node: `{ name: {clientPartyName}, externalId: {clientExternalId}, partyId: {clientPartyId}, type: "client", children: [] }`
 - For each entry in `relatedParties.Management/Board.partiesList`: create a node `{ name, externalId, partyId, type: "party", children: [] }` and attach as direct child of root
 - For each entry in `relatedParties.Management/Board.nonPartiesList`: create a node `{ name, externalId, partyId: null, type: "non-party", children: [] }` and attach as direct child of root
+- The client root appears for spatial context only and is **never** counted in the bucket count, never added to `searchTerms`, and never added to any grid row downstream.
 - Board members are always flat — they have no children
 
 **IF** `relatedParties.Management/Board.total` = 0:
@@ -300,6 +312,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
     - `ADD` → create all non-party board members in a single bulk `intappCommon:create_party` call (pass the full array as `body`) → GO TO Step 3d
     - `SKIP` → GO TO Step 3d
 
+**Exit check:** `relatedParties.Management/Board.total` = `relatedParties.Management/Board.parties` + `relatedParties.Management/Board.nonParties`. The client `partyId` is not in `partiesList` and the client `externalId` is not in `nonPartiesList` for this bucket.
+
 ---
 
 #### Step 3d: UBO
@@ -307,7 +321,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **Build `{uboTreeHierarchy}`**
 - Use `relatedParties.UBO.displayHierarchy` as the tree structure.
 - For each node in the hierarchy, enrich with `name`, `partyId`, and `type` by matching `externalId` against `partiesList` (type = `"party"`) and `nonPartiesList` (type = `"non-party"`).
-- The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`.
+- The client node is identified where `externalId` = `{clientExternalId}` — set type = `"client"`. The client appears in the hierarchy for spatial context only and is **never** counted in any bucket count, never added to any `searchTerms`, and never added to any grid row downstream.
 - If a node's `externalId` cannot be matched to either list, skip it.
 
 **IF** `relatedParties.UBO.total` = 0:
@@ -334,6 +348,9 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - WAIT for user input
     - `ADD` → create all non-party beneficial owners in a single bulk `intappCommon:create_party` call (pass the full array as `body`) → GO TO Step 3e
     - `SKIP` → GO TO Step 3e
+
+**Exit check:** `relatedParties.UBO.total` = `relatedParties.UBO.parties` + `relatedParties.UBO.nonParties`. The client `partyId` is not in `partiesList` and the client `externalId` is not in `nonPartiesList` for this bucket.
+
 ---
 
 #### Step 3e: Proceed
@@ -368,6 +385,8 @@ WAIT for user input:
 
 **GO TO** Step 5
 
+**Exit check:** `{clientPartyId}` does not appear as an entry in `{relatedPartiesTable[]}`. No entry has the relationship label `"Client"`.
+
 ---
 
 Step 5: Create Request and Conflicts Screen
@@ -386,6 +405,8 @@ Step 5: Create Request and Conflicts Screen
   - Link to request with `{reqID}`
   - Set `{conID}` from response
 - Run conflicts search with `IntappApp:run_conflict_search` using `{conID}`
+
+**Exit check:** `{reqID}` and `{conID}` are both non-null.
 
 ---
 
@@ -436,6 +457,7 @@ Build a single bulk write of all conflicts-search resolutions seen in Phase A, t
 
 #### Phase D — Read external data and populate hit resolutions
 
+- Verify `IntappJungle:list_external_data` is loaded. If not, call `tool_search` to load it. If still unavailable after one retry, halt — do not proceed to Step 7 with an empty `{moodysResolutions}`.
 - Initialise `{moodysResolutions}` as an empty map.
 - For each unique `partyId` in `{moodysHitEvents}[]`, call `IntappJungle:list_external_data` with:
   - `search_externalSourceType` = `{moodyResolutionSourceType}`
@@ -448,6 +470,8 @@ Build a single bulk write of all conflicts-search resolutions seen in Phase A, t
   - If not found, leave `hit.resolution` = `null`
 
 **GO TO** Step 7
+
+**Exit check:** `IntappJungle:list_external_data` was called for every unique `partyId` in `{moodysHitEvents}[]`.
 
 ---
 
@@ -501,6 +525,8 @@ Build a single bulk write of all conflicts-search resolutions seen in Phase A, t
 
 Total hits per party must equal: fullWeight hits (auto + confirmed) + partialWeight hits (auto only) + noWeight hits (auto + confirmed)
 
+**Exit check:** Every hit has `weight ∈ {fullWeight, partialWeight, noWeight}` (no `unknownWeight` remaining) and non-null mutually-exclusive `auto` / `confirmed` (exactly one is `true` per hit).
+
 ---
 
 #### Step 7b: Party Risk Score
@@ -513,6 +539,8 @@ Total hits per party must equal: fullWeight hits (auto + confirmed) + partialWei
 
 For each entry in `{moodysHitEvents}[]`, apply the scoring rules defined in **Appendix B** in full, in order. Set `riskScore` and `riskLevel` on each entry.
 
+**Exit check:** Every entry in `{moodysHitEvents}[]` has non-null `riskScore` and `riskLevel`.
+
 ---
 
 #### Step 7c: Overall Risk Score
@@ -524,6 +552,8 @@ For each entry in `{moodysHitEvents}[]`, apply the scoring rules defined in **Ap
 | **Notification Rule** | Zero output permitted during this step except the status message above. |
 
 Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvents}[]`. Set `{overallRiskScore}` and `{overallRiskLevel}`.
+
+**Exit check:** `{overallRiskScore}` and `{overallRiskLevel}` are both non-null.
 
 ---
 
@@ -547,6 +577,8 @@ For errored hits where `moodysGRID` is null due to `moodysError`: assign weight 
 > ⚠️ Column placement is determined solely by `weight`. Event code severity (including Critical codes such as WLT, SNX, PEP) affects `riskScore` only — it never promotes a hit to a higher-weight column. A `partialWeight` hit with WLT goes in **Moderate Match**, always.
 
 Verify that the total assigned hits per party equals `hits[].length` for that party before rendering. If counts do not match, correct before proceeding.
+
+**Pre-render check:** No party row in the table has `relationship` = `"Client"` unless its `partyId` = `{clientPartyId}`. If false, fix upstream in Step 3 / Step 4 before rendering.
 
 #### Render
 
@@ -578,9 +610,7 @@ Per cell:
    Omit a line if its count is 0.
 4. Render `—` when no hits of that weight exist for that party
 
-**Sort order:** Client row first, then related parties sorted by `riskScore` descending. Letters are assigned in this rendered order: the client (if it has any hits) = A, next party = B, and so on.
-
-**Review letter rule:** Only parties with at least one hit in `{moodysHitEvents}[]` get a Review letter. Parties with zero hits are omitted from the table entirely.
+**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in all three Risk Event columns and `-` in Risk Score in that case. Related parties follow, sorted by `riskScore` descending. Letters are assigned in this rendered order: client = A, next party = B, and so on.
 
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
@@ -771,6 +801,8 @@ See **Appendix K** for full XML cell rules.
 }
 ```
 
+**Pre-call check:** `updates[]` contains exactly one entry per unique `partyId` in `{moodysHitEvents}[]`. The client entry includes both `_moodyAgentRuns` and `_moodyAgentRunsClient` table appends plus the `_moodyAgentNext` field update. All other entries include only `_moodyAgentRuns`.
+
 ---
 
 #### Response Handling
@@ -902,7 +934,7 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 
 #### Grid Question XML
 
-*(one `<GridRow>` per entry across all `partiesList[]` buckets in `{relatedParties}`, deduplicated by `partyId`, with `<RowId>` incrementing from 0)*
+*(one `<GridRow>` per entry across all `partiesList[]` buckets in `{relatedParties}`, deduplicated by `partyId`, with `<RowId>` incrementing from 0. The client `partyId` is **never** included in this grid — it is the subject of the request, not a relationship.)*
 
 ```xml
 <Grid>
@@ -947,7 +979,7 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 
 *(one entry per unique party across all `partiesList[]` buckets in `{relatedParties}`, plus the client as first entry)*
 - Client entry: `{ "affiliationType": "{clientPartyConAff}", "name": "{clientPartyName}", "partyId": "{clientPartyId}" }`
-- Related party entries: `{ "affiliationType": "{relPartyConAff}", "name": "{partyName}", "partyId": "{partyId}" }` — deduplicated by `partyId`
+- Related party entries: `{ "affiliationType": "{relPartyConAff}", "name": "{partyName}", "partyId": "{partyId}" }` — deduplicated by `partyId`. The client `partyId` must **not** appear as a related party entry — it is only included once via the client entry above.
 
 ```json
 {
@@ -968,6 +1000,8 @@ Overall score = `client riskScore` + sum of all related party contributions, cap
 Relationship buckets are **non-exclusive** — a single entity can and should be recorded in multiple buckets simultaneously. Evaluate all bucket conditions for every entity regardless of source; do not stop at the first match.
 
 **Example:** The GUO is always also a Parent. If it additionally appears in the shareholders list, it holds three relationships at once: `["GUO", "Parent", "Shareholder"]`. It appears as a single row in `{relatedPartiesTable[]}` with all three labels — never as duplicate rows, and never counted more than once toward any bucket's `total`.
+
+**Client exclusion rule:** The client `partyId` is the subject of the screen, not a relationship to itself. It must never appear in any bucket's `partiesList`, `nonPartiesList`, or in `{relatedPartiesTable[]}`. If the underlying corp structure response includes the client as a node in any tree (which is normal for hierarchy context), the merge logic must filter it out before populating `{relatedPartiesTable[]}`.
 
 #### `IntappJungle:get_corp_structure_party_relationships` tool relatedParties Schema
 
@@ -1237,9 +1271,11 @@ Children are nested inline — each node carries its own `children[]` array. Ren
 
 | Symbol | Type | Meaning |
 |---|---|---|
-| 🔷 | `client` | The client party |
+| 🔷 | `client` | The client party. Shown for spatial context only — never holds the bucket's relationship label, never counted in the bucket's totals, never added to downstream `searchTerms` or grid rows. |
 | ✅ | `party` | Exists as an Intapp party |
 | ❌ | `non-party` | No Intapp party record |
+
+The `{label}` describes only the ✅ and ❌ nodes in the tree — it does **not** describe the 🔷 node. For example, in a tree labelled `Corporate tree parents`, the 🔷 node is the client, not a parent; only the ✅ and ❌ nodes are parents.
 
 ---
 
