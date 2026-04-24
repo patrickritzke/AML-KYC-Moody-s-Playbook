@@ -425,11 +425,12 @@ For each search party, initialise one entry in `{moodysHitEvents}[]` with:
 
 Build a single bulk write of all conflicts-search resolutions seen in Phase A, then call `IntappJungle:post_external_data_bulk` once.
 
-- For every hit captured in Phase A where the conflicts-search `resolution` is non-empty (i.e. `{conResMatch}` or `{conResNoMatch}`):
+- For every hit captured in Phase A where the conflicts-search `resolution` is **exactly** `{conResMatch}` or `{conResNoMatch}`:
   - Build one external data record per **Appendix N** schema, with `remoteId` = `"{partyId}_{gridId}"`
-- If at least one record was built, call `IntappJungle:post_external_data_bulk` with all records in a single `items[]` array.
+- Any other `resolution` value — empty string, `null`, `"Cleared"`, or any string other than the two allowed values — is **skipped**. Do not write it to external data.
+- If at least one record was built, call `IntappJungle:post_external_data_bulk` once with all records in a single `items[]` array.
 - This call is upsert: existing records (matched by `remoteId` + `externalSourceType`) are overwritten with the latest conflicts-search resolution. New records are created.
-- If no hits had a non-empty resolution, skip the call.
+- If no hits had an allowed resolution, skip the call entirely.
 
 > The conflicts-search `resolution` field is only used as input to this sync. Once written to external data, all downstream reads use external data as the source of truth.
 
@@ -1329,7 +1330,7 @@ This scales with party count, not hit count — typically 5–20 calls per run r
 |---|---|
 | Step 6 Phase A | Conflicts search hits fetched. Their `resolution` field captured but **not yet** written to `{moodysHitEvents}`. |
 | Step 6 Phase B | `{moodysHitEvents}[]` skeleton built. `hits[].resolution` initialised to `null`. |
-| Step 6 Phase C | Every non-empty conflicts-search resolution written to external data (upsert) via one bulk call. |
+| Step 6 Phase C | Conflicts-search resolutions matching `{conResMatch}` or `{conResNoMatch}` (and only those two values) written to external data via one bulk upsert call. All other resolution values are skipped. |
 | Step 6 Phase D | External data read per partyId. `{moodysResolutions}` map built. Every `hits[].resolution` populated from the map (or left `null` if no record exists). |
 | Step 7a | Classification reads `hits[].resolution` (already external-data-sourced). |
 | Step 9 option B (Rerun) | Loops back to Step 6, repeating Phases A–D — including any resolutions written by Step 9c since last run. |
