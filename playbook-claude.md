@@ -1238,7 +1238,7 @@ Tool returns `{ updated, failed, errors? }`. Use this to populate the per-party 
 
 ### Appendix M: Hierarchy Display
 
-Renders `{treeHierarchy}` as a recursively nested indented tree. Accepts any pre-built hierarchy — no knowledge of relationship type or data source is required.
+Renders `{treeHierarchy}` as a recursively nested indented tree. Accepts any pre-built hierarchy and renders it **exactly as passed in** — no reordering, inversion, sorting, or restructuring of any kind.
 
 ---
 
@@ -1263,25 +1263,40 @@ Renders `{treeHierarchy}` as a recursively nested indented tree. Accepts any pre
 }
 ```
 
-Children are nested inline — each node carries its own `children[]` array. Render the structure as-is.
+---
+
+#### Rendering Order — Non-Negotiable
+
+The renderer **never** decides node order or hierarchy direction. The caller has already arranged the tree in the order they want it displayed.
+
+- Render every root node at indent level 0 in the exact order it appears in `{treeHierarchy}`.
+- For each node, render its `children[]` indented one level deeper, in the exact order they appear in the array.
+- Do **not** reorder by type, name, externalId, partyId, depth, or any other attribute.
+- Do **not** invert, flip, or re-root the tree based on which node is the client.
+- Do **not** infer ancestor/descendant direction. The structure on the page mirrors the structure in the input — period.
+- The client node (🔷) may appear at the root, at a leaf, or anywhere in between. Its position is whatever the caller passed in. The 🔷 indicator is the **only** thing that changes based on which node is the client; position is untouched.
 
 ---
 
 #### Indicators
 
+Indicators apply to whichever node carries the matching `type` value, regardless of where that node sits in the tree.
+
 | Symbol | Type | Meaning |
 |---|---|---|
-| 🔷 | `client` | The client party. Shown for spatial context only — never holds the bucket's relationship label, never counted in the bucket's totals, never added to downstream `searchTerms` or grid rows. |
+| 🔷 | `client` | The client party. Marks the client node wherever it appears in the tree — root, leaf, or middle. Shown for spatial context only — never holds the bucket's relationship label, never counted in the bucket's totals, never added to downstream `searchTerms` or grid rows. |
 | ✅ | `party` | Exists as an Intapp party |
 | ❌ | `non-party` | No Intapp party record |
 
-The `{label}` describes only the ✅ and ❌ nodes in the tree — it does **not** describe the 🔷 node. For example, in a tree labelled `Corporate tree parents`, the 🔷 node is the client, not a parent; only the ✅ and ❌ nodes are parents.
+The `{label}` describes only the ✅ and ❌ nodes in the tree — it does **not** describe the 🔷 node.
 
 ---
 
 #### Empty State
 
 If `{treeHierarchy}` is null, empty, or all root nodes have no children and no type, render:
+
+**{label}**
 
 ```
 No {label} found.
@@ -1293,7 +1308,11 @@ Stop. Do not render a tree or summary line.
 
 #### Rendering
 
-Traverse '{treeHierarchy}' recursively depth-first. Indent each level 5 spaces relative to its parent. Always wrap the entire tree output in a fenced code block (```) so indentation is preserved in rendering.
+Render `{label}` as a bolded line **immediately above** the fenced code block — never inside it. One blank line separates the label from the code block.
+
+Then traverse `{treeHierarchy}` recursively depth-first **in the order nodes appear in the input arrays**. Indent each level 5 spaces relative to its parent. Always wrap the entire tree output in a fenced code block (```) so indentation is preserved in rendering.
+
+**{label}**
 
 ```
 {indicator}  {name} ({externalId})
@@ -1307,7 +1326,7 @@ Traverse '{treeHierarchy}' recursively depth-first. Indent each level 5 spaces r
 
 #### Summary Line
 
-Render immediately below the tree. Use `{label}` as the entity noun:
+Render immediately below the code block. Use `{label}` as the entity noun:
 
 ```
 🔷 Client
