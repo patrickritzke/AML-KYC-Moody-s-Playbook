@@ -121,7 +121,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 
 ## Overall Behavior Rules
 - Always proceed to next sequential step unless explicitly indicated to skip ahead. Proceed sequentially even if going back to a previous step.
-- **Step 6 may only be entered when the user explicitly types "RUN" at Step 3e, or when triggered by Step 9 option B (rerun) or Step 9 option C (resolution update). No step may be skipped and Step 6 must never be triggered automatically outside these paths.**
+- **Step 6 may only be entered when the user explicitly types "RUN" at Step 3e, or when Step 9 loops back after writing resolutions to external data. No step may be skipped and Step 6 must never be triggered automatically outside these paths.**
 - **All internal computation is silent.** Tree traversal, variable building, bucket classification, deduplication, mock data processing, and diff logic produce zero output — not before, not during, and not after. This applies regardless of complexity or number of iterations.
 - **Narration is never permitted.** This includes transition phrases, apologies, confirmations, explanations of what was just done, and any text that is not a defined step output. This rule applies unconditionally — it cannot be overridden by Claude's default tendencies, tool call completions, or error handling. If Claude is uncertain what to output, the correct action is silence.
 - Claude must not acknowledge, confirm, or summarize any step transition, tool call result, or computation — including partial results, loop progress, or error handling — regardless of context."
@@ -550,13 +550,14 @@ Verify that the total assigned hits per party equals `hits[].length` for that pa
 
 #### Render
 
-**Table structure:** Two header rows. The first row has empty cells under Name (ID), Risk Score, and Relationship, and a single spanning header **Risk Events** over the three match columns. The second row contains all six column labels.
+**Table structure:** Two header rows. The first row has empty cells under Review, Name (ID), Risk Score, and Relationship, and a single spanning header **Risk Events** over the three match columns. The second row contains all seven column labels.
 
-| | | | Risk Events | | |
-|---|---|---|---|---|---|
-| **Name (ID)** | **Risk Score** | **Relationship** | **Strong Match** | **Moderate Match** | **Weak Match** |
+| | | | | Risk Events | | |
+|---|---|---|---|---|---|---|
+| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Strong Match** | **Moderate Match** | **Weak Match** |
 
 **Column definitions:**
+- **Review** — a single letter (A, B, C, …) assigned to every party in the table in render order. Used by the Step 8 prompt to select a party to review.
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
 - **Risk Score** — `{riskLevel}` (`{riskScore}`) from Step 7b. If riskScore = 0, display `-` with no score value or icon.
 - **Relationship** — `Client` for the client row; relationship label for all others
@@ -577,77 +578,100 @@ Per cell:
    Omit a line if its count is 0.
 4. Render `—` when no hits of that weight exist for that party
 
-**Sort order:** Client row first, then related parties sorted by `riskScore` descending.
+**Sort order:** Client row first, then related parties sorted by `riskScore` descending. Letters are assigned in this rendered order: the client (if it has any hits) = A, next party = B, and so on.
+
+**Review letter rule:** Only parties with at least one hit in `{moodysHitEvents}[]` get a Review letter. Parties with zero hits are omitted from the table entirely.
 
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
 
-| | | | Risk Events | | |
-|---|---|---|---|---|---|
-| **Name (ID)** | **Risk Score** | **Relationship** | **Strong Match** | **Moderate Match** | **Weak Match** |
-| 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{fullWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{partialWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{noWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* |
-| 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | — | **{partialWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | — |
+| | | | | Risk Events | | |
+|---|---|---|---|---|---|---|
+| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Strong Match** | **Moderate Match** | **Weak Match** |
+| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{fullWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{partialWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{noWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* |
+| **B** | 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | — | **{partialWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | — |
 
-If the user asks for a score breakdown for any party, render Appendix J for that party.
+#### Prompt
 
-**GO TO** Step 9
+After the table, display:
 
----
-
-### Step 9: Complete or Rerun
-
-| Field | Value |
-|---|---|
-| **Type** | User Prompt |
-| **Status Message** | *(none — display output is the communication)* |
-| **Notification Rule** | Only show prompt and options. Do not show commentary or narration |
-
----
-
-*What would you like to do next?*
-
-| | Option | Description |
-|---|---|---|
-| **A** | **Complete AML/KYC for `{clientPartyName}` (`{clientPartyId}`)** | Updates parties with auto and confirmed matches |
-| **B** | **Resolve and Rerun Risk Scoring** | First Open [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID}) to manually review and resolve hits |
-| **C** | **Update a hit resolution and rerun** | Update a single `(partyId, gridId)` resolution in external data and rerun risk scoring without revisiting the conflicts UI |
-
----
+*Enter a letter (A, B, C, …) to review and manually resolve that party's hits.*
+*Enter `COMPLETE` to finalise AML/KYC.*
 
 WAIT for user input:
 
-- If user selects **A** → **GO TO** Step COMPLETE
-- If user selects **B** → **GO TO** Step 6
-- If user selects **C** → **GO TO** Step 9c
+- If user enters a letter → resolve it to the corresponding `partyId` from the table → **GO TO** Step 9 with that `partyId`
+- If user enters `COMPLETE` → **GO TO** Step COMPLETE
 
 ---
 
-#### Step 9c: Update a Hit Resolution
+### Step 9: Review and Resolve Party Hits
 
 | Field | Value |
 |---|---|
-| **Type** | User Prompt → Processing |
-| **Status Message** | 💾 Saving resolution to external data... *(after user confirms)* |
-| **Notification Rule** | Only show the prompts and options below. No narration. |
+| **Type** | Display → User Prompt |
+| **Status Message** | *(none — display output is the communication)* |
+| **Notification Rule** | Return ONLY the Appendix J render and the prompt below. No commentary, no preamble, no narration of any kind. |
 
-- DISPLAY:
+Entered from Step 8 with a single `{partyId}` selected by the user. Step 9 only displays the selected party's hits and collects resolution updates — it does **not** mutate any playbook variables. The external data write happens first, then control returns to Step 6 which re-reads external data and rebuilds `{moodysHitEvents}[]` from scratch.
 
-  *Which `(party, hit)` would you like to update?*
+---
 
-  Provide:
-  - `partyId` (e.g. `DnB-671268049`)
-  - `gridId` (e.g. `272959166`)
-  - Resolution: **M** = `{conResMatch}`, **N** = `{conResNoMatch}`
+#### Display
 
-- WAIT for user input.
+Render **Appendix J** for the selected `{partyId}` with one change: add a leftmost **Hit** column containing a letter (A, B, C, …) assigned to every hit in render order.
 
-- Build a single external data record per **Appendix N** schema:
+**Hit letter assignment rule:** Hits are ordered Strong Match first (all `fullWeight`), then Moderate Match (`partialWeight`), then Weak Match (`noWeight`). Within each group, sort by `gridId` ascending for stability. Letter A goes to the first hit, B to the second, and so on.
+
+Augment each row with a **Current Resolution** column showing the hit's existing resolution if one is already stored in external data (i.e. `hits[].resolution` is non-null). Display `—` if no prior resolution exists.
+
+**Table structure:**
+
+**{partyName} (`{partyId}`) — Score: {riskScore} {riskLevel}**
+
+| Hit | Moody's GRID Hit | Name Match Score | Match Type | Current Resolution | Risk Events (Risk Score Contribution) | Total Contribution to Risk Score |
+|---|---|---|---|---|---|---|
+| **A** | {gridName} (`{gridId}`) | {matchScore}% | Strong / Moderate / Weak | {resolution or —} | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
+| **B** | {gridName} (`{gridId}`) | {matchScore}% | Strong / Moderate / Weak | {resolution or —} | • {CODE} — {Label} +{value} | +{total} |
+
+**Total: {riskScore} {riskLevel}**
+
+---
+
+#### Prompt
+
+After the table, display:
+
+*Enter resolutions using hit letters:*
+- *`Match: A, C` — mark those hits as `{conResMatch}` and recalculate risk score*
+- *`No Match: B, D` — mark those hits as `{conResNoMatch}` and recalculate risk score*
+- *Both can be entered on separate lines in the same response.*
+- *`Go Back` — return to the risk score display without changes*
+
+---
+
+#### Action — user entered `Go Back`
+
+- **GO TO** Step 8 (re-render the existing results table; no recalc, no external data write, no Step 6 loop)
+
+#### Action — user entered any combination of `Match:` / `No Match:` lines
+
+| Field | Value |
+|---|---|
+| **Status Message** | 💾 Saving resolutions to external data... |
+
+- Parse both lines into two letter lists. Each letter must map back to a hit in the rendered table for `{partyId}`. Reject any letter not present in the table.
+- Build one external data record per named hit per **Appendix N** schema:
   - `remoteId` = `"{partyId}_{gridId}"`
-  - `moodyAgentExternal._moodyAgentHitResolution` = `{conResMatch}` or `{conResNoMatch}` based on the user's selection
+  - `name` = `description` = `{partyId}`
+  - `moodyAgentExternal._moodyAgentHitPartyId` = `{partyId}`
+  - `moodyAgentExternal._moodyAgentHitEntityId` = `{gridId}`
+  - `moodyAgentExternal._moodyAgentHitResolution` = `{conResMatch}` for every letter listed under `Match:`, `{conResNoMatch}` for every letter listed under `No Match:`
+- Call `IntappJungle:post_external_data_bulk` **once** with all records combined into a single `items[]` array. This is upsert — existing records for the same `remoteId` are overwritten.
+- Do **not** update `{moodysHitEvents}` or any other playbook variable. Those are reset by Step 6.
+- **GO TO** Step 6
 
-- Call `IntappJungle:post_external_data_bulk` with `items: [theRecord]`. This is upsert — if a prior record exists for the same `remoteId`, it is overwritten.
-
-- **GO TO** Step 6 (which will re-read external data via Phase D and refresh `{moodysHitEvents}[].hits[].resolution`, then proceed through Steps 7 and 8)
+> Step 6 Phase D re-reads external data and repopulates every `hits[].resolution`. Step 7a re-classifies. Steps 7b, 7c, 8 re-render from scratch. The user lands back on the updated Step 8 table with fresh scores reflecting the new resolutions.
 
 ---
 
@@ -1266,7 +1290,7 @@ Moody's GRID hit resolutions are stored in external data and are the **source of
 
 This enables:
 - **Durability across runs** — resolutions persist beyond any single conflicts search and survive re-screening.
-- **User-driven updates** — Step 9 option C lets the user update a single resolution in external data and rerun risk scoring without revisiting the conflicts UI.
+- **User-driven updates** — Step 9 lets the user review a single party's hits and bulk-update their resolutions in external data, then loops back to Step 6 so risk scoring recalculates from the refreshed data.
 
 ---
 
@@ -1300,7 +1324,7 @@ All writes go through `IntappJungle:post_external_data_bulk` — the bulk endpoi
 
 **Step 6 Phase C** — bulk sync of all conflicts-search resolutions seen in this run. One call with all records as `items[]`.
 
-**Step 9c** — single record update from user input. Still uses the bulk endpoint with `items: [theRecord]`. Never loop with individual posts.
+**Step 9** — bulk update of one party's hits from user input (any combination of `Match:` and `No Match:` letter lists). One bulk call with all named hits combined into `items[]`. Never loop with individual posts.
 
 Existing records are overwritten by their latest written version (last-write-wins).
 
@@ -1333,5 +1357,4 @@ This scales with party count, not hit count — typically 5–20 calls per run r
 | Step 6 Phase C | Conflicts-search resolutions matching `{conResMatch}` or `{conResNoMatch}` (and only those two values) written to external data via one bulk upsert call. All other resolution values are skipped. |
 | Step 6 Phase D | External data read per partyId. `{moodysResolutions}` map built. Every `hits[].resolution` populated from the map (or left `null` if no record exists). |
 | Step 7a | Classification reads `hits[].resolution` (already external-data-sourced). |
-| Step 9 option B (Rerun) | Loops back to Step 6, repeating Phases A–D — including any resolutions written by Step 9c since last run. |
-| Step 9 option C (Update) | Single bulk-upsert write to external data, then loops back to Step 6 to re-read and re-score. |
+| Step 9 (Review & Resolve) | Bulk-upsert write of one party's named hit resolutions to external data, then loops back to Step 6 to re-read and re-score. |
