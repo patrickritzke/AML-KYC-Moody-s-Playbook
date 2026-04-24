@@ -227,7 +227,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   `Type SKIP to continue`
 - ACTION:
   - WAIT for user input
-    - `ADD` → create parties via `intappCommon:create_party` → GO TO Step 3b
+    - `ADD` → create all non-party parents in a single bulk `intappCommon:create_party` call (pass the full array as `body`) → GO TO Step 3b
     - `SKIP` → GO TO Step 3b
 
 ---
@@ -257,7 +257,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   `Type SKIP to continue`
 - ACTION:
   - WAIT for user input
-    - `ADD` → create parties via `intappCommon:create_party` → GO TO Step 3c
+    - `ADD` → create all non-party subsidiaries in a single bulk `intappCommon:create_party` call (pass the full array as `body`) → GO TO Step 3c
     - `SKIP` → GO TO Step 3c
 
 ---
@@ -292,7 +292,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   `Type SKIP to continue`
 - ACTION:
   - WAIT for user input
-    - `ADD` → create parties via `intappCommon:create_party` → GO TO Step 3d
+    - `ADD` → create all non-party board members in a single bulk `intappCommon:create_party` call (pass the full array as `body`) → GO TO Step 3d
     - `SKIP` → GO TO Step 3d
 
 ---
@@ -327,7 +327,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   `Type SKIP to continue`
 - ACTION:
   - WAIT for user input
-    - `ADD` → create parties via `intappCommon:create_party` → GO TO Step 3e
+    - `ADD` → create all non-party beneficial owners in a single bulk `intappCommon:create_party` call (pass the full array as `body`) → GO TO Step 3e
     - `SKIP` → GO TO Step 3e
 ---
 
@@ -587,7 +587,9 @@ WAIT for user input:
 | **Status Message** | 💾 Updating party profiles with AML/KYC results... |
 | **Notification Rule** | Zero output permitted except the status message and the final completion table. No commentary between party patches, no transition phrases, no confirmation of tool calls. |
 
-For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
+Step COMPLETE has two phases:
+
+**Phase A — Per-party GET and row build.** For each unique `partyId` in `{moodysHitEvents}[]` (including the client):
 
 - Call `intappCommon:get_party` with `partyId` to retrieve existing `_moodyAgentRuns` rows
 
@@ -608,7 +610,7 @@ xml_runs_client = result._moodyAgentRunsClient  ?? ""
 
   For the client party only, also parse `xml_runs_client` into its own rows array using the `_moodyAgentRunsClient` column definitions in Appendix K. If absent, null, or empty string, treat as an empty rows array.
 
-- **Before patching**, output one line per party (this is the one inline narration permitted by the global Execution Rules — it is a defensive check to confirm the read-modify-write pattern is operating on the correct row count before PATCH replaces the entire table):
+- **Before moving to Phase B**, output one line per party (this is the one inline narration permitted by the global Execution Rules — it is a defensive check to confirm the read-modify-write pattern is operating on the correct row count before the bulk PATCH replaces the entire table for each party):
 
 ```
 {partyName} ({partyId}): {n} existing rows — appending 1 → {n+1} total
@@ -647,13 +649,19 @@ xml_runs_client = result._moodyAgentRunsClient  ?? ""
 | `reqID` | `{ "stringValue": "{reqID}" }` |
 | `riskScoreOverall` | `{ "stringValue": "{overallRiskLevel} ({overallRiskScore})" }` — use `"None"` if `overallRiskScore` = 0 or null |
 
-- Call `intappCommon:update_party` with `partyId` and the appropriate body. Expect `204 No Content` on success. On failure, note the error and continue to next party — do not abort.
-  - If `partyId` = `{clientPartyId}`: `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] }, "_moodyAgentRunsClient": { "rows": [...existingRunsClientRows, newRunsClientRow] }, "_moodyAgentNext": "<6 months from today at midnight UTC, e.g. 2026-10-15T00:00:00Z>" }`
-  - All other parties: `{ "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`
+- Assemble a per-party update object — do **not** call `update_party` yet:
+  - If `partyId` = `{clientPartyId}`: `{ "partyId": "{clientPartyId}", "_moodyAgentRuns": { "rows": [...existingRows, newRow] }, "_moodyAgentRunsClient": { "rows": [...existingRunsClientRows, newRunsClientRow] }, "_moodyAgentNext": "<6 months from today at midnight UTC, e.g. 2026-10-15T00:00:00Z>" }`
+  - All other parties: `{ "partyId": "{partyId}", "_moodyAgentRuns": { "rows": [...existingRows, newRow] } }`
 
+  Append the object to an `updates[]` array.
+
+**Phase B — Single bulk PATCH.** Once every party has been processed in Phase A:
+
+- Call `intappCommon:update_party` **once** with `items: updates[]` — this issues a single bulk `PUT /api/common/v2/parties/_bulk`. Expect `204 No Content` on success.
+- On bulk failure or per-item errors reported in the response, capture the failing `partyId` and error message; continue — do not re-issue individual calls unless the bulk endpoint itself rejects the full batch.
 - Track result per party: `{ partyId, partyName, success: true/false, error?: "..." }`
 
-After all patches complete, display:
+After the bulk patch completes, display:
 
 ---
 
@@ -989,23 +997,13 @@ Relationship buckets are **non-exclusive** — a single entity can and should be
 
 ---
 
-# Playbook Update — Appendix K Rewrite
-
-Replace the existing Appendix K in full with the following:
-
----
-
-# Playbook Update — Appendix K Rewrite
-
-Replace the existing Appendix K in full with the following:
-
----
-
 ### Appendix K: Patching DataTable Fields on a Party
 
-Two DataTable custom fields are written during Step COMPLETE. Both follow the same read-modify-write pattern: GET existing rows, parse XML, append new row, PATCH full array. The PATCH endpoint replaces the entire table — appending requires reading first.
+Two DataTable custom fields are written during Step COMPLETE. Both follow the same read-modify-write pattern: GET existing rows per party, parse XML, append new row, then issue a **single bulk PATCH** covering all parties in one call. The PATCH endpoint replaces the entire table for each party — appending requires reading first.
 
-**Endpoint:** `PATCH /api/common/v1/parties/{partyId}` → `204 No Content`
+**Endpoints:**
+- Per-party read: `GET /api/common/v1/parties/{partyId}` (via `intappCommon:get_party`)
+- Bulk write: `PUT /api/common/v2/parties/_bulk` (via `intappCommon:update_party` with `items[]`) → `204 No Content`
 
 ---
 
@@ -1062,13 +1060,16 @@ Records the overall aggregate risk score from each run — the risk across the f
 
 ---
 
-#### PATCH Body
+#### Per-item body (inside bulk `items[]` array)
+
+Each object in the bulk `items[]` array must include `partyId` plus the fields being updated.
 
 **Client party** (`partyId` = `{clientPartyId}`):
 ```
 {
+  "partyId":                "{clientPartyId}",
   "_moodyAgentRuns":        { "rows": [...existingRows, newRow] },
-  "_moodyAgentRunsClient": { "rows": [...existingOverallRows, newOverallRow] },
+  "_moodyAgentRunsClient":  { "rows": [...existingOverallRows, newOverallRow] },
   "_moodyAgentNext":        "<6 months from today at midnight UTC, e.g. 2026-10-15T00:00:00Z>"
 }
 ```
@@ -1076,9 +1077,12 @@ Records the overall aggregate risk score from each run — the risk across the f
 **All other parties**:
 ```
 {
+  "partyId":         "{partyId}",
   "_moodyAgentRuns": { "rows": [...existingRows, newRow] }
 }
 ```
+
+The full bulk call passes every assembled item at once: `intappCommon:update_party` with `items: [clientItem, ...relatedPartyItems]`.
 
 ---
 
