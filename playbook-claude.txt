@@ -347,9 +347,9 @@ Every output Claude produces during the playbook begins with the current step's 
 | Field | Value |
 |---|---|
 | **Type** | Prompt |
-| **Progress Header** | ☑ **Client**  ›  ▣ **Corp Structure**  ›  ☐ Screening  ›  ☐ Score  ›  ☐ Complete |
-| **Status** | 🌳 *Confirming review path* |
-| **Notification Rule** | Only show the Progress Header + Status block followed by the prompt. Do not show any commentary or narration. |
+| **Progress Header** | None |
+| **Status** | None |
+| **Notification Rule** | Do not show any commentary or narration. |
 
 - DISPLAY the per-bucket summary so the user can decide whether a manual review is warranted:
 
