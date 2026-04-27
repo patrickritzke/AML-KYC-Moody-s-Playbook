@@ -366,6 +366,7 @@ Every output Claude produces during the playbook begins with the current step's 
   |---|---|---|
   | Parent | `{relatedParties.Parent.parties}` | `{relatedParties.Parent.nonParties}` |
   | Subsidiary | `{relatedParties.Subsidiary.parties}` | `{relatedParties.Subsidiary.nonParties}` |
+  | Sibling | `{relatedParties.Sbling.parties}` | `{relatedParties.Sibling.nonParties}` |
   | Management/Board | `{relatedParties.Management/Board.parties}` | `{relatedParties.Management/Board.nonParties}` |
   | Shareholder | `{relatedParties.Shareholder.parties}` | `{relatedParties.Shareholder.nonParties}` |
   | UBO | `{relatedParties.UBO.parties}` | `{relatedParties.UBO.nonParties}` |
