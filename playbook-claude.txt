@@ -41,6 +41,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `{clientPartyName}` — Display name of the client
 - `{clientPartyExternalId}` — External ID of the client (e.g. Moody's GRID ID)
 - `{clientPartyExternalIdProvider}` — Provider that issued the external ID
+- `{clientPartyLastScore}` — Last Overall Risk Score from  "_moodyAgentScore"
+- `{clientPartyLastScoreDate}` — Last Overall Risk Score Date from "_moodyAgentLast": null,
 
 ### Corporate Structure Relationships
 - `{relatedParties}` — Single object tracking all corporate structure relationships. Each key holds a count of all entities (`total`), a count of those already Intapp parties (`parties`), and the list of matched party records (`list`):
@@ -284,7 +286,7 @@ Every output Claude produces during the playbook begins with the current step's 
 
 - Search the system for existing party record by party name with `intappCommon:search_parties`
 - If found:
-  - Set `{clientPartyId}`, `{clientPartyName}`, `{clientPartyExternalId}`, `{clientPartyExternalIdProvider}`
+  - Set `{clientPartyId}`, `{clientPartyName}`, `{clientPartyExternalId}`, `{clientPartyExternalIdProvider}`, `{clientPartyLastScore}`, `{clientPartyLastScoreDate}`  from the selected result
   - **GO TO** Step 2
 - If not found or no party was input → **GO TO** Step 1b
 
@@ -310,7 +312,7 @@ Every output Claude produces during the playbook begins with the current step's 
   > - **B** — Party Name (ID) - Overdue by # Days
   > - *(up to 10 options)*
 - Wait for user to type a letter:
-  - Set `{clientPartyId}`, `{clientPartyName}`, `{clientPartyExternalId}`, `{clientPartyExternalIdProvider}` from the selected result
+  - Set `{clientPartyId}`, `{clientPartyName}`, `{clientPartyExternalId}`, `{clientPartyExternalIdProvider}`, `{clientPartyLastScore}`, `{clientPartyLastScoreDate}`  from the selected result
   - **GO TO** Step 2
 
 **Exit check:** `{clientPartyId}` and `{clientPartyName}` are non-null before exiting to Step 2.
@@ -353,7 +355,10 @@ Every output Claude produces during the playbook begins with the current step's 
 
 - DISPLAY the per-bucket summary so the user can decide whether a manual review is warranted:
 
-  **🔷 {clientPartyName}` (`{clientPartyId}`) Corporate Structure Relationships Screening Summary**
+  **🔷 {clientPartyName}` (`{clientPartyId}`)** 
+  Current Moody's GRID Risk Score: `{clientPartyScore}` (`{clientPartyLast}`)
+
+  **Corporate Structure Relationships Screening Summary**
 
   | Relationship | ✅ Included in Screening | ❌ Excluded in Screening |
   |---|---|---|
