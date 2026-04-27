@@ -706,9 +706,9 @@ Total hits per party must equal: fullWeight hits (auto + confirmed) + partialWei
 | **Status** | 📊 *Calculating client and corporate structure relationship risk scores...* |
 | **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. |
 
-For each entry in `{moodysHitEvents}[]`, apply the scoring rules defined in **Appendix B** in full, in order. Set `riskScore` and `riskLevel` on each entry.
+For each entry in `{moodysHitEvents}[]`, apply the calculation defined in **Appendix C** to set `riskScore` and `riskLevel`.
 
-**Exit check:** Every entry in `{moodysHitEvents}[]` has non-null `riskScore` and `riskLevel`.
+**Exit check:** Every entry in `{moodysHitEvents}[]` has non-null `riskScore` and `riskLevel`, and `riskScore` ≤ 100.
 
 ---
 
@@ -1034,17 +1034,30 @@ Playbook ended but not completed.
 
 ### Appendix B: Party-Level Risk Score Calculation
 
-Evaluate in order, stop at first match:
+Calculates a `riskScore` and `riskLevel` for a single screened party from its Moody's GRID hits.
 
-1. If any Critical code appears in `summary.fullWeightEvents` → score = 100, 🔴 High
-2. Otherwise, sum all unique event code values across `summary.fullWeightEvents` (100%) and `summary.partialWeightEvents` (50%, rounded down)
+#### Per-hit lookup
 
-| Tier | Codes | Full Weight | Partial Weight |
-|---|---|---|---|
-| Critical | BLK, DEN, FOF, FOS, IRC, MLA, ORG, PEP, SNX, TER, WLT | 100 → instant 🔴 High | +10 |
-| Valuable | BRB, BUS, CFT, CYB, DTF, ENV, FRD, FUG, GAM, HUM, IMP, KID, LMD, LNS, MOR, MSB, MUR, OBS, PRJ, REG, RES, SEC, SEX, SMG, SPY, TAX, TFT, TRF, VCY | +5 | +2 |
-| Investigative | ARS, AST, BUR, CON, DPS, FOR, IGN, PSP, ROB | +3 | +1 |
-| Probative | ABU, CPR, IPR, MIS, NSC | +1 | +0 |
+For each hit in the party's `hits[]`:
+
+1. Determine the hit's classification column from `weight`, `confirmed`, and `auto`:
+   - `weight = fullWeight` AND `confirmed = true` → **Confirmed Match**
+   - `weight = fullWeight` AND `auto = true` → **Auto Strong**
+   - `weight = partialWeight` AND `auto = true` → **Auto Moderate**
+   - `weight = noWeight` AND `auto = true` → **Auto Weak**
+   - `weight = noWeight` AND `confirmed = true` → **Confirmed No Match**
+
+2. For each `eventCode` on the hit, look up the integer at `(code row, classification column)` in **Appendix B**.
+
+3. Sum the values to produce the hit's score contribution.
+
+#### Party total
+
+Sum all hit contributions for the party. If the total exceeds `100`, set `riskScore = 100`. Otherwise, `riskScore` equals the sum.
+
+> Note: Codes valued `100` in Appendix B (e.g. PEP, SNX, IRC, MLA) on a Confirmed Match or Auto Strong hit will, on their own, push the party to the cap and produce 🔴 High. Auto Weak and Confirmed No Match contribute `0` for every code and never affect the total.
+
+#### Score-to-level conversion
 
 | Risk Level | Score |
 |---|---|
@@ -1052,8 +1065,6 @@ Evaluate in order, stop at first match:
 | 🟠 Medium | 40 – 66 |
 | 🔘 Low | 1 – 39 |
 | None | 0 |
-
-`noWeight` event codes do not contribute to score.
 
 ---
 
@@ -1253,64 +1264,75 @@ Relationship buckets are **non-exclusive** — a single entity can and should be
 
 ---
 
-### Appendix H: Risk Label & Event Code Reference
+### Appendix H: Moody's GRID Event Category Reference
 
-| Code | Label |
-|---|---|
-| ABU | Abuse (Domestic, Elder, Child) |
-| ARS | Arson |
-| AST | Assault, Battery |
-| BLK | Firm Specific Blocked List |
-| BRB | Bribery, Graft, Kickbacks, Political Corruption |
-| BUR | Burglary |
-| BUS | Business Crimes (Antitrust, Bankruptcy, Price Fixing) |
-| CFT | Counterfeiting, Forgery |
-| CON | Conspiracy (no specific crime named) |
-| CPR | Copyright Infringement (Intellectual Property, Electronic Piracy) |
-| CYB | Computer Related, Cyber Crime |
-| DEN | Denied Entity |
-| DPS | Possession of Drugs or Drug Paraphernalia |
-| DTF | Trafficking or Distribution of Drug |
-| ENV | Environmental Crimes (Poaching, Illegal Logging, Animal Cruelty) |
-| FOF | Former OFAC List |
-| FOR | Forfeiture |
-| FOS | Former Sanctions |
-| FRD | Fraud, Scams, Swindles |
-| FUG | Fugitive, Escape |
-| GAM | Illegal Gambling |
-| HUM | Human Rights, Genocide, War Crimes |
-| IGN | Possession or Sale of Guns, Weapons and Explosives |
-| IMP | Identity Theft, Impersonation |
-| IPR | Illegal Prostitution |
-| IRC | Iran Connect |
-| KID | Kidnapping, Abduction, Held Against Will |
-| LMD | Legal Marijuana Dispensaries |
-| LNS | Loan Sharking, Usury, Predatory Lending |
-| MIS | Misconduct |
-| MLA | Money Laundering |
-| MOR | Mortgage Related |
-| MSB | Money Services Business |
-| MUR | Murder, Manslaughter (Committed, Planned or Attempted) |
-| NSC | Nonspecific Crime |
-| OBS | Obscenity Related, Child Pornography |
-| ORG | Organized Crime, Criminal Association, Racketeering |
-| PEP | Politically Exposed Person |
-| PRJ | Perjury, Obstruction of Justice, False Filings, False Statements |
-| PSP | Possession of Stolen Property |
-| REG | Regulatory Action |
-| RES | Real Estate Actions |
-| ROB | Robbery (Stealing by Threat, Use of Force) |
-| SEC | SEC Violations (Insider Trading, Securities Fraud) |
-| SEX | Sex Offenses (Rape, Sodomy, Sexual Abuse, Pedophilia) |
-| SMG | Smuggling (Does not include Drugs, Money, People or Guns) |
-| SNX | Sanctions Connect |
-| SPY | Spying (Treason, Espionage) |
-| TAX | Tax Related Offenses |
-| TER | Terrorist Related |
-| TFT | Theft (Larceny, Misappropriation, Embezzlement, Extortion) |
-| TRF | People Trafficking, Organ Trafficking |
-| VCY | Virtual Currency |
-| WLT | Watchlisted Entities |
+Lookup table for every Moody's GRID event category code returned by enrichment. Use this for label resolution, display formatting, and per-hit score contribution lookup during party risk calculation.
+
+- **Code** — the Moody's GRID event category code (e.g. FRD, ENV, IRC).
+- **Label** — the human-readable description of the event code.
+- **Confirmed Match** — points added per occurrence when a hit is user-confirmed as `{conResMatch}`.
+- **Auto Strong** — points added per occurrence when a hit is auto-classified as a likely match (name match score ≥ `{fullWeightAutoMatchMin}`).
+- **Auto Moderate** — points added per occurrence when a hit is auto-classified as a possible match (name match score between `{partialWeightAutoMatchMin}` and `{fullWeightAutoMatchMin}`).
+- **Auto Weak** — points added per occurrence when a hit is auto-classified as unlikely (name match score < `{partialWeightAutoMatchMin}`). Always 0 — shown for analyst visibility only.
+- **Confirmed No Match** — points added per occurrence when a hit is user-confirmed as `{conResNoMatch}`. Always 0.
+
+
+| Code | Label | Confirmed Match | Auto Strong | Auto Moderate | Auto Weak | Confirmed No Match |
+|---|---|---|---|---|---|---|
+| ABU | Abuse (Domestic, Elder, Child) | 1 | 1 | 0 | 0 | 0 |
+| ARS | Arson | 3 | 3 | 1 | 0 | 0 |
+| AST | Assault, Battery | 3 | 3 | 1 | 0 | 0 |
+| BLK | Firm Specific Blocked List | 100 | 100 | 10 | 0 | 0 |
+| BRB | Bribery, Graft, Kickbacks, Political Corruption | 5 | 5 | 2 | 0 | 0 |
+| BUR | Burglary | 3 | 3 | 1 | 0 | 0 |
+| BUS | Business Crimes (Antitrust, Bankruptcy, Price Fixing) | 5 | 5 | 2 | 0 | 0 |
+| CFT | Counterfeiting, Forgery | 5 | 5 | 2 | 0 | 0 |
+| CON | Conspiracy (no specific crime named) | 3 | 3 | 1 | 0 | 0 |
+| CPR | Copyright Infringement (Intellectual Property, Electronic Piracy) | 1 | 1 | 0 | 0 | 0 |
+| CYB | Computer Related, Cyber Crime | 5 | 5 | 2 | 0 | 0 |
+| DEN | Denied Entity | 100 | 100 | 10 | 0 | 0 |
+| DPS | Possession of Drugs or Drug Paraphernalia | 3 | 3 | 1 | 0 | 0 |
+| DTF | Trafficking or Distribution of Drug | 5 | 5 | 2 | 0 | 0 |
+| ENV | Environmental Crimes (Poaching, Illegal Logging, Animal Cruelty) | 5 | 5 | 2 | 0 | 0 |
+| FOF | Former OFAC List | 100 | 100 | 10 | 0 | 0 |
+| FOR | Forfeiture | 3 | 3 | 1 | 0 | 0 |
+| FOS | Former Sanctions | 100 | 100 | 10 | 0 | 0 |
+| FRD | Fraud, Scams, Swindles | 5 | 5 | 2 | 0 | 0 |
+| FUG | Fugitive, Escape | 5 | 5 | 2 | 0 | 0 |
+| GAM | Illegal Gambling | 5 | 5 | 2 | 0 | 0 |
+| HUM | Human Rights, Genocide, War Crimes | 5 | 5 | 2 | 0 | 0 |
+| IGN | Possession or Sale of Guns, Weapons and Explosives | 3 | 3 | 1 | 0 | 0 |
+| IMP | Identity Theft, Impersonation | 5 | 5 | 2 | 0 | 0 |
+| IPR | Illegal Prostitution | 1 | 1 | 0 | 0 | 0 |
+| IRC | Iran Connect | 100 | 100 | 10 | 0 | 0 |
+| KID | Kidnapping, Abduction, Held Against Will | 5 | 5 | 2 | 0 | 0 |
+| LMD | Legal Marijuana Dispensaries | 5 | 5 | 2 | 0 | 0 |
+| LNS | Loan Sharking, Usury, Predatory Lending | 5 | 5 | 2 | 0 | 0 |
+| MIS | Misconduct | 1 | 1 | 0 | 0 | 0 |
+| MLA | Money Laundering | 100 | 100 | 10 | 0 | 0 |
+| MOR | Mortgage Related | 5 | 5 | 2 | 0 | 0 |
+| MSB | Money Services Business | 5 | 5 | 2 | 0 | 0 |
+| MUR | Murder, Manslaughter (Committed, Planned or Attempted) | 5 | 5 | 2 | 0 | 0 |
+| NSC | Nonspecific Crime | 1 | 1 | 0 | 0 | 0 |
+| OBS | Obscenity Related, Child Pornography | 5 | 5 | 2 | 0 | 0 |
+| ORG | Organized Crime, Criminal Association, Racketeering | 100 | 100 | 10 | 0 | 0 |
+| PEP | Politically Exposed Person | 100 | 100 | 10 | 0 | 0 |
+| PRJ | Perjury, Obstruction of Justice, False Filings, False Statements | 5 | 5 | 2 | 0 | 0 |
+| PSP | Possession of Stolen Property | 3 | 3 | 1 | 0 | 0 |
+| REG | Regulatory Action | 5 | 5 | 2 | 0 | 0 |
+| RES | Real Estate Actions | 5 | 5 | 2 | 0 | 0 |
+| ROB | Robbery (Stealing by Threat, Use of Force) | 3 | 3 | 1 | 0 | 0 |
+| SEC | SEC Violations (Insider Trading, Securities Fraud) | 5 | 5 | 2 | 0 | 0 |
+| SEX | Sex Offenses (Rape, Sodomy, Sexual Abuse, Pedophilia) | 5 | 5 | 2 | 0 | 0 |
+| SMG | Smuggling (Does not include Drugs, Money, People or Guns) | 5 | 5 | 2 | 0 | 0 |
+| SNX | Sanctions Connect | 100 | 100 | 10 | 0 | 0 |
+| SPY | Spying (Treason, Espionage) | 5 | 5 | 2 | 0 | 0 |
+| TAX | Tax Related Offenses | 5 | 5 | 2 | 0 | 0 |
+| TER | Terrorist Related | 100 | 100 | 10 | 0 | 0 |
+| TFT | Theft (Larceny, Misappropriation, Embezzlement, Extortion) | 5 | 5 | 2 | 0 | 0 |
+| TRF | People Trafficking, Organ Trafficking | 5 | 5 | 2 | 0 | 0 |
+| VCY | Virtual Currency | 5 | 5 | 2 | 0 | 0 |
+| WLT | Watchlisted Entities | 100 | 100 | 10 | 0 | 0 |
 
 ---
 
