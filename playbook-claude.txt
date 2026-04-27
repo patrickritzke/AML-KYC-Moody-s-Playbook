@@ -319,6 +319,8 @@ Every output Claude produces during the playbook begins with the current step's 
 
 ### Step 2: Identify Party Corporate Structure Relationships
 
+#### Step 2a: Fetch Corporate Structure
+
 | Field | Value |
 |---|---|
 | **Type** | Processing |
@@ -334,9 +336,44 @@ Every output Claude produces during the playbook begins with the current step's 
   - `{relatedParties}` — per-bucket counts and `partiesList` of matched Intapp parties
 - Note: `{clientPartyExternalIdProvider}` was captured in Step 1 and is the authoritative provider name used throughout the playbook. The `providerType` field on the response is informational only — do not use it downstream.
 - If no corporate trees found → **GO TO** Step END
-- **GO TO** Step 3
+- **GO TO** Step 2b
 
 **Exit check:** `{clientPartyId}` does not appear as an entry in any bucket's `partiesList` or `nonPartiesList`. The client is the subject of the screen, never a relationship to itself.
+
+---
+
+#### Step 2b: Choose Review Path
+
+| Field | Value |
+|---|---|
+| **Type** | Prompt |
+| **Progress Header** | ☑ **Client**  ›  ▣ **Corp Structure**  ›  ☐ Screening  ›  ☐ Score  ›  ☐ Complete |
+| **Status** | 🌳 *Confirming review path* |
+| **Notification Rule** | Only show the Progress Header + Status block followed by the prompt. Do not show any commentary or narration. |
+
+- DISPLAY the per-bucket summary so the user can decide whether a manual review is warranted:
+
+  **Corporate structure summary for `{clientPartyName}` (`{clientPartyId}`)**
+
+  | Bucket | Total | Already Parties | Not Yet Parties |
+  |---|---|---|---|
+  | GUO | `{relatedParties.GUO.total}` | `{relatedParties.GUO.parties}` | `{relatedParties.GUO.nonParties}` |
+  | Parent | `{relatedParties.Parent.total}` | `{relatedParties.Parent.parties}` | `{relatedParties.Parent.nonParties}` |
+  | Subsidiary | `{relatedParties.Subsidiary.total}` | `{relatedParties.Subsidiary.parties}` | `{relatedParties.Subsidiary.nonParties}` |
+  | Sibling | `{relatedParties.Sibling.total}` | `{relatedParties.Sibling.parties}` | `{relatedParties.Sibling.nonParties}` |
+  | Management/Board | `{relatedParties.Management/Board.total}` | `{relatedParties.Management/Board.parties}` | `{relatedParties.Management/Board.nonParties}` |
+  | Shareholder | `{relatedParties.Shareholder.total}` | `{relatedParties.Shareholder.parties}` | `{relatedParties.Shareholder.nonParties}` |
+  | UBO | `{relatedParties.UBO.total}` | `{relatedParties.UBO.parties}` | `{relatedParties.UBO.nonParties}` |
+
+- DISPLAY the prompt:
+
+  *Enter `REVIEW` to manually review corporate structure relationships (parents, subsidiaries, management/board, shareholders, beneficial owners) before screening.*
+
+  *Enter `RUN` to screen with existing corporate structure relationships.*
+
+- WAIT for user input:
+  - `REVIEW` → **GO TO** Step 3
+  - `RUN` → **GO TO** Step 4
 
 ---
 
