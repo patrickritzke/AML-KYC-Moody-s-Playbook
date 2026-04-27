@@ -42,7 +42,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `{clientPartyExternalId}` — External ID of the client (e.g. Moody's GRID ID)
 - `{clientPartyExternalIdProvider}` — Provider that issued the external ID
 - `{clientPartyLastScore}` — Last Overall Risk Score from  "_moodyAgentScore"
-- `{clientPartyLastScoreDate}` — Last Overall Risk Score Date from "_moodyAgentLast": null,
+- `{clientPartyLastScoreDate}` — Last Overall Risk Score Date from `_moodyAgentLast`. Format as date-only (YYYY-MM-DD) for display — strip the time component from the ISO 8601 timestamp (e.g. `2026-04-22T05:00:00.0000000Z` → `2026-04-22`).
 
 ### Corporate Structure Relationships
 - `{relatedParties}` — Single object tracking all corporate structure relationships. Each key holds a count of all entities (`total`), a count of those already Intapp parties (`parties`), and the list of matched party records (`list`):
@@ -356,7 +356,7 @@ Every output Claude produces during the playbook begins with the current step's 
 - DISPLAY the per-bucket summary so the user can decide whether a manual review is warranted:
 
   **🔷 {clientPartyName}` (`{clientPartyId}`)** 
-  Current Moody's GRID Risk Score: `{clientPartyScore}` (`{clientPartyLast}`)
+  Current Moody's GRID Risk Score: `{clientPartyLastScore}` (`{clientPartyLastScoreDate}`)
 
   **Corporate Structure Relationships Screening Summary**
 
