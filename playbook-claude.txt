@@ -355,9 +355,11 @@ Every output Claude produces during the playbook begins with the current step's 
 
 - DISPLAY the per-bucket summary so the user can decide whether a manual review is warranted:
 
-  **🔷 {clientPartyName}` (`{clientPartyId}`)** 
+  **🔷 {clientPartyName}` (`{clientPartyId}`)**
+  <br>
   Current Moody's GRID Risk Score: `{clientPartyLastScore}` (`{clientPartyLastScoreDate}`)
-
+  <br>
+  <br>
   **Corporate Structure Relationships Screening Summary**
 
   | Relationship | ✅ Included in Screening | ❌ Excluded in Screening |
@@ -940,7 +942,10 @@ For each unique `partyId` in `{moodysHitEvents}[]`:
 - Build a `_moodyAgentRuns` `<Row>` XML string using the field mappings below
 - For the **client party only**, additionally:
   - Build a `_moodyAgentRunsClient` `<Row>` XML string
-  - Include `_moodyAgentNext` in `fieldUpdates`
+  - Include `_moodyAgentNext` in `fieldUpdates` (6 months from today at midnight UTC)
+  - Include `_moodyAgentScore` in `fieldUpdates` set to `{overallRiskScore}`
+  - Include `_moodyAgentLast` in `fieldUpdates` set to today at midnight UTC (ISO 8601, e.g. `2026-04-27T00:00:00Z`)
+
 
 #### Field Mappings — `_moodyAgentRuns` Row (all parties)
 
@@ -998,7 +1003,9 @@ See **Appendix K** for full XML cell rules.
         "_moodyAgentRunsClient": "<Row>...client _moodyAgentRunsClient row...</Row>"
       },
       "fieldUpdates": {
-        "_moodyAgentNext": "<6 months from today at midnight UTC, e.g. 2026-10-24T00:00:00Z>"
+        "_moodyAgentNext": "<6 months from today at midnight UTC, e.g. 2026-10-24T00:00:00Z>",
+        "_moodyAgentScore": "{overallRiskScore}",
+        "_moodyAgentLast":  "<today at midnight UTC, e.g. 2026-04-27T00:00:00Z>"
       }
     },
     {
@@ -1017,7 +1024,7 @@ See **Appendix K** for full XML cell rules.
 }
 ```
 
-**Pre-call check:** `updates[]` contains exactly one entry per unique `partyId` in `{moodysHitEvents}[]`. The client entry includes both `_moodyAgentRuns` and `_moodyAgentRunsClient` table appends plus the `_moodyAgentNext` field update. All other entries include only `_moodyAgentRuns`.
+**Pre-call check:** `updates[]` contains exactly one entry per unique `partyId` in `{moodysHitEvents}[]`. The client entry includes both `_moodyAgentRuns` and `_moodyAgentRunsClient` table appends plus `_moodyAgentNext`, `_moodyAgentScore`, and `_moodyAgentLast` field updates. All other entries include only `_moodyAgentRuns`.
 
 ---
 
@@ -1042,7 +1049,7 @@ After the call returns, display:
 
 | Party | Status |
 |---|---|
-| 🔷 `{clientPartyName}` (`{clientPartyId}`) | ✅ Saved Risk Score - Next Review Scheduled in 6 months `{nextReviewDate}` / ❌ `{error}` |
+| 🔷 `{clientPartyName}` (`{clientPartyId}`) | ✅ Saved Risk Score `{overallRiskLevel} ({overallRiskScore})` - Next Review Scheduled in 6 months `{nextReviewDate}` / ❌ `{error}` |
 | 🔹 `{partyName}` (`{partyId}`) | ✅ Saved Risk Score / ❌ `{error}` |
 
 ---
@@ -1460,7 +1467,13 @@ Each row is a string of the form:
 
 #### Additional Field Updates (Client Only)
 
-`_moodyAgentNext` is set on the client party via `fieldUpdates` in the same call — value is 6 months from today at midnight UTC (e.g. `2026-10-24T00:00:00Z`). It is a regular party field, not a DataTable, and accepts ISO 8601 directly.
+Three regular party fields are set on the client via `fieldUpdates` in the same call. None are DataTables — all accept ISO 8601 / string values directly.
+
+| Field | Value |
+|---|---|
+| `_moodyAgentNext` | 6 months from today at midnight UTC (e.g. `2026-10-24T00:00:00Z`) |
+| `_moodyAgentScore` | `{overallRiskScore}` — the overall aggregate risk score from this run |
+| `_moodyAgentLast` | Today at midnight UTC (e.g. `2026-04-27T00:00:00Z`) |
 
 ---
 
