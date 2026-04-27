@@ -353,17 +353,17 @@ Every output Claude produces during the playbook begins with the current step's 
 
 - DISPLAY the per-bucket summary so the user can decide whether a manual review is warranted:
 
-  **Corporate structure summary for `{clientPartyName}` (`{clientPartyId}`)**
+  **🔷 {clientPartyName}` (`{clientPartyId}`) Corporate Structure Relationships Screening Summary**
 
-  | Bucket | Total | Already Parties | Not Yet Parties |
-  |---|---|---|---|
-  | GUO | `{relatedParties.GUO.total}` | `{relatedParties.GUO.parties}` | `{relatedParties.GUO.nonParties}` |
-  | Parent | `{relatedParties.Parent.total}` | `{relatedParties.Parent.parties}` | `{relatedParties.Parent.nonParties}` |
-  | Subsidiary | `{relatedParties.Subsidiary.total}` | `{relatedParties.Subsidiary.parties}` | `{relatedParties.Subsidiary.nonParties}` |
-  | Sibling | `{relatedParties.Sibling.total}` | `{relatedParties.Sibling.parties}` | `{relatedParties.Sibling.nonParties}` |
-  | Management/Board | `{relatedParties.Management/Board.total}` | `{relatedParties.Management/Board.parties}` | `{relatedParties.Management/Board.nonParties}` |
-  | Shareholder | `{relatedParties.Shareholder.total}` | `{relatedParties.Shareholder.parties}` | `{relatedParties.Shareholder.nonParties}` |
-  | UBO | `{relatedParties.UBO.total}` | `{relatedParties.UBO.parties}` | `{relatedParties.UBO.nonParties}` |
+  | Relationship | ✅ Included in Screening | ❌ Excluded in Screening |
+  |---|---|---|
+  | Parent | `{relatedParties.Parent.parties}` | `{relatedParties.Parent.nonParties}` |
+  | Subsidiary | `{relatedParties.Subsidiary.parties}` | `{relatedParties.Subsidiary.nonParties}` |
+  | Management/Board | `{relatedParties.Management/Board.parties}` | `{relatedParties.Management/Board.nonParties}` |
+  | Shareholder | `{relatedParties.Shareholder.parties}` | `{relatedParties.Shareholder.nonParties}` |
+  | UBO | `{relatedParties.UBO.parties}` | `{relatedParties.UBO.nonParties}` |
+
+> *Relationships are included in screening if they exist in the corporate structure AND exist as an Intapp party record.*
 
 - DISPLAY the prompt:
 
