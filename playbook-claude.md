@@ -279,7 +279,7 @@ Every output Claude produces during the playbook begins with the current step's 
 |---|---|
 | **Type** | Processing |
 | **Progress Header** | ▣ **Client**  ›  ☐ Corp Structure  ›  ☐ Screening  ›  ☐ Score  ›  ☐ Complete |
-| **Status** | 🔍 *Looking up [Client Name]...* |
+| **Status** | 🔍 *Looking up client [Client Name]...* |
 | **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. Do not output reasoning, variable state, intermediate results, or commentary under any circumstances — including when processing loops, handling errors, or transitioning between steps. |
 
 - Search the system for existing party record by party name with `intappCommon:search_parties`
@@ -350,7 +350,7 @@ Every output Claude produces during the playbook begins with the current step's 
 |---|---|
 | **Type** | Display / Prompt |
 | **Progress Header** | ☑ **Client**  ›  ▣ **Corp Structure**  ›  ☐ Screening  ›  ☐ Score  ›  ☐ Complete |
-| **Status** | 🌳 *Reviewing parents* |
+| **Status** | 🌳 *Identifying corporate structure parent relationships* |
 | **Notification Rule** | Only show the Progress Header + Status block followed by the defined display/prompt. No commentary, no narration. |
 
 **Build `{parentTreeHierarchy}`**
@@ -394,7 +394,7 @@ Every output Claude produces during the playbook begins with the current step's 
 |---|---|
 | **Type** | Display / Prompt |
 | **Progress Header** | ☑ **Client**  ›  ▣ **Corp Structure**  ›  ☐ Screening  ›  ☐ Score  ›  ☐ Complete |
-| **Status** | 🌳 *Reviewing subsidiaries* |
+| **Status** | 🌳 *Identifying corporate structure subsidiaries* |
 | **Notification Rule** | Only show the Progress Header + Status block followed by the defined display/prompt. No commentary, no narration. |
 
 **Build `{subsidiaryTreeHierarchy}`**
@@ -433,7 +433,7 @@ Every output Claude produces during the playbook begins with the current step's 
 |---|---|
 | **Type** | Display / Prompt |
 | **Progress Header** | ☑ **Client**  ›  ▣ **Corp Structure**  ›  ☐ Screening  ›  ☐ Score  ›  ☐ Complete |
-| **Status** | 🌳 *Reviewing management & board* |
+| **Status** | 🌳 *Identifying management & board members* |
 | **Notification Rule** | Only show the Progress Header + Status block followed by the defined display/prompt. No commentary, no narration. |
 
 **Build `{boardTreeHierarchy}`**
@@ -478,7 +478,7 @@ Every output Claude produces during the playbook begins with the current step's 
 |---|---|
 | **Type** | Display / Prompt |
 | **Progress Header** | ☑ **Client**  ›  ▣ **Corp Structure**  ›  ☐ Screening  ›  ☐ Score  ›  ☐ Complete |
-| **Status** | 🌳 *Reviewing beneficial owners* |
+| **Status** | 🌳 *Identifying beneficial owners* |
 | **Notification Rule** | Only show the Progress Header + Status block followed by the defined display/prompt. No commentary, no narration. |
 
 **Build `{uboTreeHierarchy}`**
@@ -522,7 +522,7 @@ Every output Claude produces during the playbook begins with the current step's 
 |---|---|
 | **Type** | Prompt |
 | **Progress Header** | ☑ **Client**  ›  ▣ **Corp Structure**  ›  ☐ Screening  ›  ☐ Score  ›  ☐ Complete |
-| **Status** | 🌳 *Confirming scope* |
+| **Status** | 🌳 *Finalizing corporate structure relationships for screening* |
 | **Notification Rule** | Only show the Progress Header + Status block followed by the prompt. Do not show any commentary or narration. |
 
 - If any parties were created across Steps 3a–3d → re-call `IntappJungle:get_corp_structure_party_relationships` with `include_non_parties` = `false`, update `{relatedParties}`
@@ -541,9 +541,9 @@ WAIT for user input:
 | Field | Value |
 |---|---|
 | **Type** | Processing |
-| **Progress Header** | ☑ **Client**  ›  ▣ **Corp Structure**  ›  ☐ Screening  ›  ☐ Score  ›  ☐ Complete |
-| **Status** | 🌳 *Merging relationships* |
-| **Notification Rule** | Only the Progress Header + Status block. Do not show commentary or narration. |
+| **Progress Header** | None |
+| **Status** | None |
+| **Notification Rule** | Do not show commentary or narration. |
 
 - Build the table from `{relatedParties}`: iterate each bucket (GUO, Parent, Subsidiary, Sibling, Management/Board, Shareholder, UBO), collect all entries from each `partiesList`, group by `partyId`, and merge relationship labels for any party that appears in multiple buckets.
   - See **Appendix F** for `{relatedParties}` full schema.
@@ -560,7 +560,7 @@ Step 5: Create Request and Conflicts Screen
 |---|---|
 | **Type** | Processing |
 | **Progress Header** | ☑ **Client**  ›  ☑ **Corp Structure**  ›  ▣ **Screening**  ›  ☐ Score  ›  ☐ Complete |
-| **Status** | 🛡️ *Creating request and Moody's GRID screen...* |
+| **Status** | 🛡️ *Creating AML/KYC Request and Conflicts Search...* |
 | **Notification Rule** | Progress Header + Status block only. Do not show commentary or narration. |
 
 - Create a request with `IntappApp:create_request`
@@ -582,7 +582,7 @@ Step 5: Create Request and Conflicts Screen
 |---|---|
 | **Type** | Processing |
 | **Progress Header** | ☑ **Client**  ›  ☑ **Corp Structure**  ›  ▣ **Screening**  ›  ☐ Score  ›  ☐ Complete |
-| **Status** | 🛡️ *Screening parties on Moody's GRID...* |
+| **Status** | 🛡️ *Screening Moody's GRID via Conflicts Search...* |
 | **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. |
 
 Step 6 has four phases. All operate silently — no output between them.
@@ -703,7 +703,7 @@ Total hits per party must equal: fullWeight hits (auto + confirmed) + partialWei
 |---|---|
 | **Type** | Processing |
 | **Progress Header** | ☑ **Client**  ›  ☑ **Corp Structure**  ›  ☑ **Screening**  ›  ▣ **Score**  ›  ☐ Complete |
-| **Status** | 📊 *Calculating client and corporate structure relationship risk scores...* |
+| **Status** | 📊 *Calculating party risk scores...* |
 | **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. |
 
 For each entry in `{moodysHitEvents}[]`, apply the calculation defined in **Appendix C** to set `riskScore` and `riskLevel`.
@@ -718,7 +718,7 @@ For each entry in `{moodysHitEvents}[]`, apply the calculation defined in **Appe
 |---|---|
 | **Type** | Processing |
 | **Progress Header** | ☑ **Client**  ›  ☑ **Corp Structure**  ›  ☑ **Screening**  ›  ▣ **Score**  ›  ☐ Complete |
-| **Status** | 📊 *Calculating overall risk score...* |
+| **Status** | 📊 *Calculating client's overall risk score...* |
 | **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. |
 
 Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvents}[]`. Set `{overallRiskScore}` and `{overallRiskLevel}`.
@@ -732,9 +732,9 @@ Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvent
 | Field | Value |
 |---|---|
 | **Type** | Display |
-| **Progress Header** | ☑ **Client**  ›  ☑ **Corp Structure**  ›  ☑ **Screening**  ›  ▣ **Score**  ›  ☐ Complete |
-| **Status** | 📊 *Reviewing screening results* |
-| **Notification Rule** | Return ONLY the Progress Header + Status block followed by the display specified below. Do not add commentary, preamble, or narration of any kind. |
+| **Progress Header** | None |
+| **Status** | None |
+| **Notification Rule** | Return ONLY the display specified below. Do not add commentary, preamble, or narration of any kind. |
 
 #### Column Assignment (Silent)
 
@@ -812,7 +812,7 @@ WAIT for user input:
 |---|---|
 | **Type** | Display → User Prompt |
 | **Progress Header** | ☑ **Client**  ›  ☑ **Corp Structure**  ›  ☑ **Screening**  ›  ▣ **Score**  ›  ☐ Complete |
-| **Status** | 📊 *Resolving hits for {partyName}* |
+| **Status** | 📊 *Retrieving screening results for {partyName}* |
 | **Notification Rule** | Return ONLY the Progress Header + Status block followed by the Appendix J render and the prompt below. No commentary, no preamble, no narration of any kind. |
 
 Entered from Step 8 with a single `{partyId}` selected by the user. Step 9 only displays the selected party's hits and collects resolution updates — it does **not** mutate any playbook variables. The external data write happens first, then control returns to Step 6 which re-reads external data and rebuilds `{moodysHitEvents}[]` from scratch.
@@ -884,7 +884,7 @@ After the table, display:
 |---|---|
 | **Type** | Processing → Display |
 | **Progress Header** | ☑ **Client**  ›  ☑ **Corp Structure**  ›  ☑ **Screening**  ›  ☑ **Score**  ›  ▣ **Complete** |
-| **Status** | ✅ *Updating party profiles with AML/KYC results...* |
+| **Status** | ✅ *Updating client and related party profiles with AML/KYC results...* |
 | **Notification Rule** | Zero output permitted except the Progress Header + Status block during processing, then the same Progress Header + Status block followed by the final completion table after the call returns. No commentary between operations, no transition phrases, no confirmation of tool calls. |
 
 Build a single `updates[]` array — one entry per unique `partyId` in `{moodysHitEvents}[]` (including the client) — then make **one call** to `IntappJungle:append_party_table_rows`. The tool fetches each party, appends the supplied `<Row>` XML to the named table field, and PATCHes only the changed fields. All party updates run in parallel internally — no manual fetch, parse, or merge required, and unrelated party fields are untouched.
