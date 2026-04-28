@@ -1065,7 +1065,7 @@ If `{previousRiskScore}` (= `{clientPartyLastScore}` from Step 1) is null/empty,
 | New Risk Level | Action |
 |---|---|
 | 🔘 Low | Auto-complete AML/KYC Initiation |
-| 🟠 Medium | Complete AML/KYC Initiation after approval |
+| 🟠 Medium | Request review and approval to complete AML/KYC Initiation |
 | 🔴 High | Escalate to High Risk Enhanced Due Diligence |
 
 Display format (3 lines):
@@ -1081,16 +1081,16 @@ New Risk Score: {currIcon} {currLevel} ({curr})
 
 | Condition | Headline | Action |
 |---|---|---|
-| No change | No change to client risk score | Record and complete only |
-| Increase, same level | Minor increase to client risk score | Notify |
-| Decrease, same level | Minor decrease to client risk score | Record and complete only |
-| Increase, level up | Major increase to client risk score | Trigger review |
-| Decrease, level down | Major decrease to client risk score | Record and complete only |
+| No change | No change to client risk score | Auto-complete AML/KYC Review |
+| Increase, same level | Minor increase to client risk score | Notify Stakeholders / Auto-complete AML/KYC Review |
+| Decrease, same level | Minor decrease to client risk score | Auto-complete AML/KYC Review |
+| Increase, level up | Major increase to client risk score | Escalate to Enhanced Due Diigence AML/KYC Review |
+| Decrease, level down | Major decrease to client risk score | Auto-complete AML/KYC Review |
 
 Display format (4 lines, appended to Step COMPLETE output):
 
 ```
-Previous Risk Score ({clientPartyLastScoreDate}): {prevIcon} {prevLevel} ({prev})
+Previous Risk Score: {prevIcon} {prevLevel} ({prev}) (from ({clientPartyLastScoreDate}))
 New Risk Score: {currIcon} {currLevel} ({curr})
 
 {⬆|⬇|→} **{Headline}**
