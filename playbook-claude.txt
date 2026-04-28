@@ -1055,6 +1055,48 @@ After the call returns, display:
 
 ---
 
+### Risk Score Change Headline
+
+If `{previousRiskScore}` (= `{clientPartyLastScore}` from Step 1) is null/empty, this is an **AML/KYC Initiation** — there is no prior score to compare against. Skip the change comparison and use the initiation logic instead. Otherwise, compare `{overallRiskScore}` against `{previousRiskScore}` to determine the change. "Minor" = same risk level; "Major" = risk level changed. Use Appendix A icons: 🔴 High, 🟠 Medium, 🔘 Low, None.
+
+#### Initiation (no previous risk score)
+
+| New Risk Level | Action |
+|---|---|
+| 🔘 Low | Auto-complete AML/KYC Initiation |
+| 🟠 Medium | Complete AML/KYC Initiation after approval |
+| 🔴 High | Escalate to High Risk Enhanced Due Diligence |
+
+Display format (3 lines):
+
+```
+AML/KYC Initiation
+New Risk Score: {currIcon} {currLevel} ({curr})
+
+*Action: {action for the matched row only}.*
+```
+
+#### Subsequent Run (previous risk score exists)
+
+| Condition | Headline | Action |
+|---|---|---|
+| No change | No change to client risk score | Record and complete only |
+| Increase, same level | Minor increase to client risk score | Notify |
+| Decrease, same level | Minor decrease to client risk score | Record and complete only |
+| Increase, level up | Major increase to client risk score | Trigger review |
+| Decrease, level down | Major decrease to client risk score | Record and complete only |
+
+Display format (4 lines, appended to Step COMPLETE output):
+
+```
+Previous Risk Score ({clientPartyLastScoreDate}): {prevIcon} {prevLevel} ({prev})
+New Risk Score: {currIcon} {currLevel} ({curr})
+
+{⬆|⬇|→} **{Headline}**
+*Action: {action for the matched row only}.*
+```
+---
+
 Playbook completed.
 ---
 
