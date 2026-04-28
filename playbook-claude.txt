@@ -32,8 +32,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - `{reqRefGridLikelyMatchRiskEvent}` = `"Likely Matches Risk Events"`
 - `{conResMatch}` = `"Moody's GRID - Is a Match"`
 - `{conResNoMatch}` = `"Moody's GRID - Is Not a Match"`
-- `{fullWeightAutoMatchMin}` = `0.70`  — minimum matchScore for auto match to be classified fullWeight (Likely)
-- `{partialWeightAutoMatchMin}` = `0.50`  — minimum matchScore for auto match to be classified partialWeight (Unlikely)
+- `{autoStrongMin}` = `0.70`  — minimum matchScore for an unresolved hit to be classified `autoStrong`
+- `{autoModerateMin}` = `0.50`  — minimum matchScore for an unresolved hit to be classified `autoModerate`
 - `{moodyResolutionSourceType}` = `"moodyAgentExternal"` — `externalSourceType` used for all Moody's GRID resolution records in external data
 
 ### Client Party
@@ -86,16 +86,17 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
     "riskScore":    "integer | null",
     "riskLevel":    "High | Medium | Low | null",
     "summary": {
-      "fullWeightEvents":    "string[]",
-      "partialWeightEvents": "string[]"
+      "confMatchEvents":     "string[]",
+      "autoStrongEvents":    "string[]",
+      "autoModerateEvents":  "string[]",
+      "autoWeakEvents":      "string[]",
+      "confNoMatchEvents":   "string[]"
     },
     "hits": [
       {
         "gridId":     "string",
         "resolution": "string | null",
-        "weight":     "unknownWeight | fullWeight | partialWeight | noWeight",
-        "auto":       "boolean | null",
-        "confirmed":  "boolean | null",
+        "match":      "confMatch | autoStrong | autoModerate | autoWeak | confNoMatch | null",
         "matchScore": "number | null — null until Step 7a",
         "eventCodes": "string[]"
       }
@@ -107,12 +108,14 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **Rules:**
 - One entry in `{moodysHitEvents}` per `searchParty`
 - One entry in `hits[]` per Moody's GRID hit
-- All hits initialised as `unknownWeight` in Step 6; reclassified in Step 7a
-- `auto` and `confirmed` are `null` until Step 7a; thereafter mutually exclusive — only one is ever `true` per hit
-- `noWeight` hits are either manually confirmed (`resolution` = `{conResNoMatch}`, `confirmed: true`) or auto-classified (matchScore < `{partialWeightAutoMatchMin}`, `auto: true`)
-- `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits; populated in Step 7a
-- `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits; populated in Step 7a
-- `noWeight` events are excluded from `summary`
+- `match` is mutually exclusive per hit — every classified hit has exactly one of: `confMatch`, `autoStrong`, `autoModerate`, `autoWeak`, `confNoMatch`
+- All hits initialised with `match: null` in Step 6; set in Step 7a
+- `summary.confMatchEvents` — deduplicated event codes across all `confMatch` hits; populated in Step 7a
+- `summary.autoStrongEvents` — deduplicated event codes across all `autoStrong` hits; populated in Step 7a
+- `summary.autoModerateEvents` — deduplicated event codes across all `autoModerate` hits; populated in Step 7a
+- `summary.autoWeakEvents` — deduplicated event codes across all `autoWeak` hits; populated in Step 7a
+- `summary.confNoMatchEvents` — deduplicated event codes across all `confNoMatch` hits; populated in Step 7a
+- An event code may appear in multiple `summary.*` arrays if it occurs on hits with different `match` values. Each `summary.*` array is deduped within itself, not across the others.
 - `riskScore` and `riskLevel` are `null` until Step 7b
 - `hits[].resolution` is sourced from external data (Appendix N), not from the conflicts-search result. The conflicts-search resolution only feeds external data on first sight in Step 6.
 
@@ -648,9 +651,7 @@ For each search party, initialise one entry in `{moodysHitEvents}[]` with:
   - `gridId` — the `resultId`
   - `resolution` = `null` — populated in Phase D from `{moodysResolutions}`
   - `eventCodes[]` — taken directly from `moodysGRID.eventCategories[]`
-  - `weight` = `"unknownWeight"` — placeholder; recategorized in Step 7a
-  - `auto` = `null` — set in Step 7a
-  - `confirmed` = `null` — set in Step 7a
+  - `match` = `null` — placeholder; set in Step 7a
   - `matchScore` = `null` — set in Step 7a
 - `riskScore`, `riskLevel`, `summary` — left empty; populated in Steps 7b and 7c
 
@@ -689,7 +690,7 @@ Build a single bulk write of all conflicts-search resolutions seen in Phase A, t
 
 ### Step 7: Analyze Moody's GRID Hits
 
-#### Step 7a: Categorize Weight
+#### Step 7a: Categorize Match
 
 | Field | Value |
 |---|---|
@@ -702,43 +703,42 @@ Build a single bulk write of all conflicts-search resolutions seen in Phase A, t
 - For each screened party, classify each hit individually:
 
   - If `resolution` = `{conResMatch}` or `{conResNoMatch}` → classify immediately per the table below
-  - If `resolution` is null / empty / any other value → determine `isLikely` and `matchScore` via name matching:
+  - If `resolution` is null / empty / any other value → compute `matchScore` via name matching:
 
     Normalise both the hit's `moodysGRID.name` and the hit's `searchTerm` before comparing: lowercase, strip punctuation, collapse whitespace, remove legal suffixes (LLC, OOO, AO, JSC, GmbH, Inc, Ltd, Corp, Co, and common equivalents).
 
     Compute `matchScore` as the token overlap ratio: shared tokens ÷ total unique tokens across both normalised strings. Round to 2 decimal places. Store `matchScore` on the hit object.
 
-    Set `isLikely = true` if ANY condition is met:
+    Treat the hit as a near-perfect name match (forces `matchScore` to be evaluated at the `autoStrong` threshold) if ANY of these conditions are met:
     - Normalised GRID name exactly matches normalised search term
     - Normalised GRID name contains the full normalised search term as a substring
     - Normalised search term contains the full normalised GRID name as a substring
-    - `matchScore` ≥ `{fullWeightAutoMatchMin}`
 
-    Otherwise `isLikely = false`. Evaluate every unresolved hit individually — do not use total hit count to bypass this logic.
+    Otherwise use the computed `matchScore` directly. Evaluate every unresolved hit individually — do not use total hit count to bypass this logic.
 
-- Classify each hit and set `weight`, `auto`, `confirmed`, and `matchScore` fields:
+- Classify each hit and set `match` and `matchScore`:
 
-| Resolution | matchScore | weight | auto | confirmed |
-|---|---|---|---|---|
-| `{conResMatch}` | null | `fullWeight` | false | true |
-| `{conResNoMatch}` | null | `noWeight` | false | true |
-| null / other | ≥ `{fullWeightAutoMatchMin}` | `fullWeight` | true | false |
-| null / other | ≥ `{partialWeightAutoMatchMin}` and < `{fullWeightAutoMatchMin}` | `partialWeight` | true | false |
-| null / other | < `{partialWeightAutoMatchMin}` | `noWeight` | true | false |
+| Resolution | matchScore | match |
+|---|---|---|
+| `{conResMatch}` | n/a | `confMatch` |
+| `{conResNoMatch}` | n/a | `confNoMatch` |
+| null / other | ≥ `{autoStrongMin}` | `autoStrong` |
+| null / other | ≥ `{autoModerateMin}` and < `{autoStrongMin}` | `autoModerate` |
+| null / other | < `{autoModerateMin}` | `autoWeak` |
 
-- **Auto-classification rule for `noWeight`:** Hits classified as `noWeight` fall into two subtypes:
-  - **Manually confirmed** (`resolution` = `{conResNoMatch}`): `confirmed` = `true`, `auto` = `false`
-  - **Auto-classified** (matchScore < `{partialWeightAutoMatchMin}`): `auto` = `true`, `confirmed` = `false`
-  In both cases, event codes are excluded from `summary` arrays and never contribute to risk score.
+> The `match` field is mutually exclusive per hit — every hit lands in exactly one of the five values. The `summary.*` arrays, however, are populated independently — the same `eventCode` may appear in multiple summary arrays if it occurs on hits classified differently.
 
 - For each party, update its entry in `{moodysHitEvents}[]`:
-  - Set `weight`, `auto`, `confirmed`, and `matchScore` on each hit object
-  - Derive `summary.fullWeightEvents` — deduplicated event codes across all `fullWeight` hits
-  - Derive `summary.partialWeightEvents` — deduplicated event codes across all `partialWeight` hits
+  - Set `match` and `matchScore` on each hit object
+  - Derive `summary.confMatchEvents` — deduplicated event codes across all `confMatch` hits
+  - Derive `summary.autoStrongEvents` — deduplicated event codes across all `autoStrong` hits
+  - Derive `summary.autoModerateEvents` — deduplicated event codes across all `autoModerate` hits
+  - Derive `summary.autoWeakEvents` — deduplicated event codes across all `autoWeak` hits
+  - Derive `summary.confNoMatchEvents` — deduplicated event codes across all `confNoMatch` hits
 
-Total hits per party must equal: fullWeight hits (auto + confirmed) + partialWeight hits (auto only) + noWeight hits (auto + confirmed)
+Total hits per party must equal the sum across all five `match` values.
 
-**Exit check:** Every hit has `weight ∈ {fullWeight, partialWeight, noWeight}` (no `unknownWeight` remaining) and non-null mutually-exclusive `auto` / `confirmed` (exactly one is `true` per hit).
+**Exit check:** Every hit has `match ∈ {confMatch, autoStrong, autoModerate, autoWeak, confNoMatch}` (no nulls remaining).
 
 ---
 
@@ -751,7 +751,7 @@ Total hits per party must equal: fullWeight hits (auto + confirmed) + partialWei
 | **Status** | 📊 *Calculating party risk scores...* |
 | **Notification Rule** | Zero output permitted during this step except the Progress Header + Status block above. |
 
-For each entry in `{moodysHitEvents}[]`, apply the calculation defined in **Appendix C** to set `riskScore` and `riskLevel`.
+For each entry in `{moodysHitEvents}[]`, apply the calculation defined in **Appendix B** to set `riskScore` and `riskLevel`.
 
 **Exit check:** Every entry in `{moodysHitEvents}[]` has non-null `riskScore` and `riskLevel`, and `riskScore` ≤ 100.
 
@@ -783,14 +783,18 @@ Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvent
 
 #### Column Assignment (Silent)
 
-For every party in `{moodysHitEvents}[]`, silently assign each hit to a display column based solely on `weight`:
-- `fullWeight` → **Strong Match**
-- `partialWeight` → **Moderate Match**
-- `noWeight` → **Weak Match**
+For every party in `{moodysHitEvents}[]`, silently assign each hit to a display column based solely on `match`:
+- `confMatch` → **Confirmed Match**
+- `autoStrong` → **Auto Strong**
+- `autoModerate` → **Auto Moderate**
+- `autoWeak` → **Auto Weak**
+- `confNoMatch` → **Confirmed No Match**
 
-For errored hits where `moodysGRID` is null due to `moodysError`: assign weight based on matchScore as normal and note `[enrichment error — event codes unavailable]`.
+For errored hits where `moodysGRID` is null due to `moodysError`: assign `match` based on matchScore as normal and note `[enrichment error — event codes unavailable]`.
 
-> ⚠️ Column placement is determined solely by `weight`. Event code severity (including Critical codes such as WLT, SNX, PEP) affects `riskScore` only — it never promotes a hit to a higher-weight column. A `partialWeight` hit with WLT goes in **Moderate Match**, always.
+> ⚠️ Column placement is determined solely by `match`. Event code severity (including Critical codes such as WLT, SNX, PEP) affects `riskScore` only — it never promotes a hit to a higher-match column. An `autoModerate` hit with WLT goes in **Auto Moderate**, always.
+>
+> A single event code may render in more than one column for the same party if it appears on hits with different `match` values. Each cell's bold summary line is deduped within that cell only.
 
 Verify that the total assigned hits per party equals `hits[].length` for that party before rendering. If counts do not match, correct before proceeding.
 
@@ -798,44 +802,44 @@ Verify that the total assigned hits per party equals `hits[].length` for that pa
 
 #### Render
 
-**Table structure:** Two header rows. The first row has empty cells under Review, Name (ID), Risk Score, and Relationship, and a single spanning header **Risk Events** over the three match columns. The second row contains all seven column labels.
+**Table structure:** Two header rows. The first row has empty cells under Review, Name (ID), Risk Score, and Relationship, and a single spanning header **Risk Events** over the five match columns. The second row contains all nine column labels.
 
-| | | | | Risk Events | | |
-|---|---|---|---|---|---|---|
-| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Strong Match** | **Moderate Match** | **Weak Match** |
+| | | | | Risk Events | | | | |
+|---|---|---|---|---|---|---|---|---|
+| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Confirmed Match** | **Auto Strong** | **Auto Moderate** | **Auto Weak** | **Confirmed No Match** |
 
 **Column definitions:**
 - **Review** — a single letter (A, B, C, …) assigned to every party in the table in render order. Used by the Step 8 prompt to select a party to review.
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
 - **Risk Score** — `{riskLevel}` (`{riskScore}`) from Step 7b. If riskScore = 0, display `-` with no score value or icon.
 - **Relationship** — `Client` for the client row; relationship label for all others
-- **Strong Match** — all hits where `weight = fullWeight`
-- **Moderate Match** — all hits where `weight = partialWeight`
-- **Weak Match** — all hits where `weight = noWeight`
+- **Confirmed Match** — all hits where `match = confMatch`
+- **Auto Strong** — all hits where `match = autoStrong`
+- **Auto Moderate** — all hits where `match = autoModerate`
+- **Auto Weak** — all hits where `match = autoWeak`
+- **Confirmed No Match** — all hits where `match = confNoMatch`
 
 Per cell:
-1. **Bold summary line** — deduplicated event codes across all hits assigned to that column only
+1. **Bold summary line** — deduplicated event codes across all hits assigned to that column only (sourced from the corresponding `summary.*` array)
 2. One blank line
-3. Indented italic hit counts, with no blank line between them but one blank line separating them from the summary line above:
+3. Indented italic hit count:
 
    **{event codes}**
 
-   &nbsp;&nbsp;*{n} Auto-Matched Hits*
-   &nbsp;&nbsp;*{n} Matched Hits*
+   &nbsp;&nbsp;*{n} Moody's profiles*
 
-   Omit a line if its count is 0.
-4. Render `—` when no hits of that weight exist for that party
+4. Render `—` when no hits of that match value exist for that party
 
-**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in all three Risk Event columns and `-` in Risk Score in that case. Related parties follow, sorted by `riskScore` descending. Letters are assigned in this rendered order: client = A, next party = B, and so on.
+**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in all five Risk Event columns and `-` in Risk Score in that case. Related parties follow, sorted by `riskScore` descending. Letters are assigned in this rendered order: client = A, next party = B, and so on.
 
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
 
-| | | | | Risk Events | | |
-|---|---|---|---|---|---|---|
-| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Strong Match** | **Moderate Match** | **Weak Match** |
-| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{fullWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{partialWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{noWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* |
-| **B** | 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | — | **{partialWeightSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | — |
+| | | | | Risk Events | | | | |
+|---|---|---|---|---|---|---|---|---|
+| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Confirmed Match** | **Auto Strong** | **Auto Moderate** | **Auto Weak** | **Confirmed No Match** |
+| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{confMatchSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{autoStrongSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{autoModerateSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{autoWeakSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{confNoMatchSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* |
+| **B** | 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | — | — | **{autoModerateSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | — | — |
 
 #### Prompt
 
@@ -868,7 +872,7 @@ Entered from Step 8 with a single `{partyId}` selected by the user. Step 9 only 
 
 Render **Appendix J** for the selected `{partyId}` with one change: add a leftmost **Hit** column containing a letter (A, B, C, …) assigned to every hit in render order.
 
-**Hit letter assignment rule:** Hits are ordered Strong Match first (all `fullWeight`), then Moderate Match (`partialWeight`), then Weak Match (`noWeight`). Within each group, sort by `gridId` ascending for stability. Letter A goes to the first hit, B to the second, and so on.
+**Hit letter assignment rule:** Hits are ordered Confirmed Match first, then Auto Strong, then Auto Moderate, then Auto Weak, then Confirmed No Match. Within each group, sort by `gridId` ascending for stability. Letter A goes to the first hit, B to the second, and so on.
 
 Augment each row with a **Current Resolution** column showing the hit's existing resolution if one is already stored in external data (i.e. `hits[].resolution` is non-null). Display `—` if no prior resolution exists.
 
@@ -878,8 +882,8 @@ Augment each row with a **Current Resolution** column showing the hit's existing
 
 | Hit | Moody's GRID Hit | Name Match Score | Match Type | Current Resolution | Risk Events (Risk Score Contribution) | Total Contribution to Risk Score |
 |---|---|---|---|---|---|---|
-| **A** | {gridName} (`{gridId}`) | {matchScore}% | Strong / Moderate / Weak | {resolution or —} | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
-| **B** | {gridName} (`{gridId}`) | {matchScore}% | Strong / Moderate / Weak | {resolution or —} | • {CODE} — {Label} +{value} | +{total} |
+| **A** | {gridName} (`{gridId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Auto Weak / Confirmed No Match | {resolution or —} | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
+| **B** | {gridName} (`{gridId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Auto Weak / Confirmed No Match | {resolution or —} | • {CODE} — {Label} +{value} | +{total} |
 
 **Total: {riskScore} {riskLevel}**
 
@@ -950,18 +954,24 @@ For each unique `partyId` in `{moodysHitEvents}[]`:
 
 #### Field Mappings — `_moodyAgentRuns` Row (all parties)
 
+> The `*Events` fields below are deduped within themselves but not across each other. The same event code may appear in multiple `*Events` fields if it occurs on hits with different `match` values.
+
 | Cell Key | Value |
 |---|---|
 | `dateComplete` | Today's date/time, ISO 8601 (e.g. `2026-04-24T18:50:44Z`) |
 | `reqID` | `{reqID}` |
 | `riskScore` | `"{moodysHitEvents}[i].riskLevel ({moodysHitEvents}[i].riskScore)"` — use `"None"` if `riskScore` = 0 or null |
-| `riskEvents` | Comma-separated deduplicated codes across `summary.fullWeightEvents` + `summary.partialWeightEvents`, or `"None"` |
-| `confirmedRiskEvents` | Comma-separated `eventCodes` across hits where `hits[].confirmed = true`, deduplicated, or `"None"` |
-| `confirmedRiskId` | Comma-separated `gridIds` where `hits[].confirmed = true`, or empty |
-| `strongRiskEvents` | Comma-separated `eventCodes` across hits where `hits[].weight = 'fullWeight'`, deduplicated, or `"None"` |
-| `strongRiskId` | Comma-separated `gridIds` where `hits[].weight = 'fullWeight'`, or empty |
-| `modRiskEvents` | Comma-separated `eventCodes` across hits where `hits[].weight = 'partialWeight'`, deduplicated, or `"None"` |
-| `modRiskId` | Comma-separated `gridIds` where `hits[].weight = 'partialWeight'`, or empty |
+| `riskEvents` | Comma-separated deduplicated codes across **all five** summary arrays (`confMatchEvents` + `autoStrongEvents` + `autoModerateEvents` + `autoWeakEvents` + `confNoMatchEvents`), or `"None"` |
+| `confMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'confMatch'`, deduplicated, or `"None"` |
+| `confMatchIds` | Comma-separated `gridIds` where `hits[].match = 'confMatch'`, or empty |
+| `strongMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'autoStrong'`, deduplicated, or `"None"` |
+| `strongMatchIds` | Comma-separated `gridIds` where `hits[].match = 'autoStrong'`, or empty |
+| `modMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'autoModerate'`, deduplicated, or `"None"` |
+| `modMatchIds` | Comma-separated `gridIds` where `hits[].match = 'autoModerate'`, or empty |
+| `weakMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'autoWeak'`, deduplicated, or `"None"` |
+| `weakMatchIds` | Comma-separated `gridIds` where `hits[].match = 'autoWeak'`, or empty |
+| `confNoMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'confNoMatch'`, deduplicated, or `"None"` |
+| `confNoMatchIds` | Comma-separated `gridIds` where `hits[].match = 'confNoMatch'`, or empty |
 | `ranForClient` | `"{clientPartyName} ({clientPartyId})"` — same value for every party in this loop |
 | `relationship` | Relationship label(s) for this party, comma-separated. `"Client"` if client party |
 
@@ -1132,14 +1142,14 @@ Calculates a `riskScore` and `riskLevel` for a single screened party from its Mo
 
 For each hit in the party's `hits[]`:
 
-1. Determine the hit's classification column from `weight`, `confirmed`, and `auto`:
-   - `weight = fullWeight` AND `confirmed = true` → **Confirmed Match**
-   - `weight = fullWeight` AND `auto = true` → **Auto Strong**
-   - `weight = partialWeight` AND `auto = true` → **Auto Moderate**
-   - `weight = noWeight` AND `auto = true` → **Auto Weak**
-   - `weight = noWeight` AND `confirmed = true` → **Confirmed No Match**
+1. Determine the hit's classification column from `match`:
+   - `confMatch` → **Confirmed Match**
+   - `autoStrong` → **Auto Strong**
+   - `autoModerate` → **Auto Moderate**
+   - `autoWeak` → **Auto Weak**
+   - `confNoMatch` → **Confirmed No Match**
 
-2. For each `eventCode` on the hit, look up the integer at `(code row, classification column)` in **Appendix B**.
+2. For each `eventCode` on the hit, look up the integer at `(code row, classification column)` in **Appendix H**.
 
 3. Sum the values to produce the hit's score contribution.
 
@@ -1147,7 +1157,7 @@ For each hit in the party's `hits[]`:
 
 Sum all hit contributions for the party. If the total exceeds `100`, set `riskScore = 100`. Otherwise, `riskScore` equals the sum.
 
-> Note: Codes valued `100` in Appendix B (e.g. PEP, SNX, IRC, MLA) on a Confirmed Match or Auto Strong hit will, on their own, push the party to the cap and produce 🔴 High. Auto Weak and Confirmed No Match contribute `0` for every code and never affect the total.
+> Note: Codes valued `100` in Appendix H (e.g. PEP, SNX, IRC, MLA) on a `confMatch` or `autoStrong` hit will, on their own, push the party to the cap and produce 🔴 High. `autoWeak` and `confNoMatch` contribute `0` for every code and never affect the total.
 
 #### Score-to-level conversion
 
@@ -1362,11 +1372,11 @@ Lookup table for every Moody's GRID event category code returned by enrichment. 
 
 - **Code** — the Moody's GRID event category code (e.g. FRD, ENV, IRC).
 - **Label** — the human-readable description of the event code.
-- **Confirmed Match** — points added per occurrence when a hit is user-confirmed as `{conResMatch}`.
-- **Auto Strong** — points added per occurrence when a hit is auto-classified as a likely match (name match score ≥ `{fullWeightAutoMatchMin}`).
-- **Auto Moderate** — points added per occurrence when a hit is auto-classified as a possible match (name match score between `{partialWeightAutoMatchMin}` and `{fullWeightAutoMatchMin}`).
-- **Auto Weak** — points added per occurrence when a hit is auto-classified as unlikely (name match score < `{partialWeightAutoMatchMin}`). Always 0 — shown for analyst visibility only.
-- **Confirmed No Match** — points added per occurrence when a hit is user-confirmed as `{conResNoMatch}`. Always 0.
+- **Confirmed Match** — points added per occurrence when a hit has `match = confMatch` (user-confirmed as `{conResMatch}`).
+- **Auto Strong** — points added per occurrence when a hit has `match = autoStrong` (auto-classified as a likely match, name match score ≥ `{autoStrongMin}`).
+- **Auto Moderate** — points added per occurrence when a hit has `match = autoModerate` (auto-classified as a possible match, name match score between `{autoModerateMin}` and `{autoStrongMin}`).
+- **Auto Weak** — points added per occurrence when a hit has `match = autoWeak` (auto-classified as unlikely, name match score < `{autoModerateMin}`). Always 0 — shown for analyst visibility only.
+- **Confirmed No Match** — points added per occurrence when a hit has `match = confNoMatch` (user-confirmed as `{conResNoMatch}`). Always 0.
 
 
 | Code | Label | Confirmed Match | Auto Strong | Auto Moderate | Auto Weak | Confirmed No Match |
@@ -1440,8 +1450,8 @@ Lookup table for every Moody's GRID event category code returned by enrichment. 
 
 | Moody's GRID Hit | Name Match Score | Match Type | Risk Events (Risk Score Contribution) | Total Contribution to Risk Score |
 |---|---|---|---|---|
-| {gridName} (`{resultId}`) | {matchScore}% | Strong / Moderate / Weak | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
-| {gridName} (`{resultId}`) | {matchScore}% | Strong / Moderate / Weak | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +0 | +{total} |
+| {gridName} (`{resultId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Auto Weak / Confirmed No Match | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
+| {gridName} (`{resultId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Auto Weak / Confirmed No Match | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +0 | +{total} |
 
 **Total: {riskScore} {riskLevel}**
 
@@ -1457,22 +1467,28 @@ Two DataTable custom fields are written during Step COMPLETE via a single `Intap
 
 Records each party's own AML/KYC risk score from each run.
 
+> The `*Events` fields below are deduped within themselves but not across each other. The same event code may appear in multiple `*Events` fields if it occurs on hits with different `match` values.
+
 | Cell Key | Display Name | Type |
 |---|---|---|
 | `dateComplete` | Date Completed | Date — ISO 8601 with time, e.g. `2026-04-24T18:50:44Z` |
 | `reqID` | Request ID | String |
 | `riskScore` | Risk Score | String — e.g. `"Medium (28)"` or `"None"` |
 | `riskEvents` | Risk Events | String — comma-separated event codes or `"None"` |
-| `confirmedRiskEvents` | Risk Events - Confirmed | String |
-| `confirmedRiskId` | Risk Ids - Confirmed | String |
-| `strongRiskEvents` | Risk Events - Strong Match | String |
-| `strongRiskId` | Risk Ids - Strong Match | String |
-| `modRiskEvents` | Risk Events - Moderate Match | String |
-| `modRiskId` | Risk Ids - Moderate Match | String |
+| `confMatchEvents` | Risk Events - Confirmed Match | String |
+| `confMatchIds` | Risk Ids - Confirmed Match | String |
+| `strongMatchEvents` | Risk Events - Auto Strong | String |
+| `strongMatchIds` | Risk Ids - Auto Strong | String |
+| `modMatchEvents` | Risk Events - Auto Moderate | String |
+| `modMatchIds` | Risk Ids - Auto Moderate | String |
+| `weakMatchEvents` | Risk Events - Auto Weak | String |
+| `weakMatchIds` | Risk Ids - Auto Weak | String |
+| `confNoMatchEvents` | Risk Events - Confirmed No Match | String |
+| `confNoMatchIds` | Risk Ids - Confirmed No Match | String |
 | `ranForClient` | Ran for Client | String — `"{clientPartyName} ({clientPartyId})"` |
 | `relationship` | Relationship to Client | String — e.g. `"GUO, Parent"` or `"Client"` |
 
-> `ranForClient` and `relationship` must be added to the table schema in the Intapp form designer before they can be written via the API.
+> `ranForClient`, `relationship`, and the per-match event/ID columns (`confMatchEvents`, `confMatchIds`, `strongMatchEvents`, `strongMatchIds`, `modMatchEvents`, `modMatchIds`, `weakMatchEvents`, `weakMatchIds`, `confNoMatchEvents`, `confNoMatchIds`) must be added to the table schema in the Intapp form designer before they can be written via the API.
 
 ---
 
@@ -1703,8 +1719,8 @@ This scales with party count, not hit count — typically 5–20 calls per run r
 | When | What happens |
 |---|---|
 | Step 6 Phase A | Conflicts search hits fetched. Their `resolution` field captured but **not yet** written to `{moodysHitEvents}`. |
-| Step 6 Phase B | `{moodysHitEvents}[]` skeleton built. `hits[].resolution` initialised to `null`. |
+| Step 6 Phase B | `{moodysHitEvents}[]` skeleton built. `hits[].resolution` and `hits[].match` both initialised to `null`. |
 | Step 6 Phase C | Conflicts-search resolutions matching `{conResMatch}` or `{conResNoMatch}` (and only those two values) written to external data via one bulk upsert call. All other resolution values are skipped. |
 | Step 6 Phase D | External data read per partyId. `{moodysResolutions}` map built. Every `hits[].resolution` populated from the map (or left `null` if no record exists). |
-| Step 7a | Classification reads `hits[].resolution` (already external-data-sourced). |
+| Step 7a | Classification reads `hits[].resolution` (already external-data-sourced) and sets `hits[].match`. |
 | Step 9 (Review & Resolve) | Bulk-upsert write of one party's named hit resolutions to external data, then loops back to Step 6 to re-read and re-score. |
