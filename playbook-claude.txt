@@ -32,8 +32,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
   - `{reqRefGridLikelyMatchRiskEvent}` = `"Likely Matches Risk Events"`
 - `{conResMatch}` = `"Moody's GRID - Is a Match"`
 - `{conResNoMatch}` = `"Moody's GRID - Is Not a Match"`
-- `{autoStrongMin}` = `0.70`  — minimum matchScore for an unresolved hit to be classified `autoStrong`
-- `{autoModerateMin}` = `0.50`  — minimum matchScore for an unresolved hit to be classified `autoModerate`
+- `{autoStrongMin}` = `0.70`  — minimum matchScore for an unresolved hit to be classified `autoStrong`. Anything below this threshold (and not confirmed by the user) is classified `autoModerate`.
 - `{moodyResolutionSourceType}` = `"moodyAgentExternal"` — `externalSourceType` used for all Moody's GRID resolution records in external data
 
 ### Client Party
@@ -89,14 +88,13 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
       "confMatchEvents":     "string[]",
       "autoStrongEvents":    "string[]",
       "autoModerateEvents":  "string[]",
-      "autoWeakEvents":      "string[]",
       "confNoMatchEvents":   "string[]"
     },
     "hits": [
       {
         "gridId":     "string",
         "resolution": "string | null",
-        "match":      "confMatch | autoStrong | autoModerate | autoWeak | confNoMatch | null",
+        "match":      "confMatch | autoStrong | autoModerate | confNoMatch | null",
         "matchScore": "number | null — null until Step 7a",
         "eventCodes": "string[]"
       }
@@ -108,12 +106,11 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 **Rules:**
 - One entry in `{moodysHitEvents}` per `searchParty`
 - One entry in `hits[]` per Moody's GRID hit
-- `match` is mutually exclusive per hit — every classified hit has exactly one of: `confMatch`, `autoStrong`, `autoModerate`, `autoWeak`, `confNoMatch`
+- `match` is mutually exclusive per hit — every classified hit has exactly one of: `confMatch`, `autoStrong`, `autoModerate`, `confNoMatch`
 - All hits initialised with `match: null` in Step 6; set in Step 7a
 - `summary.confMatchEvents` — deduplicated event codes across all `confMatch` hits; populated in Step 7a
 - `summary.autoStrongEvents` — deduplicated event codes across all `autoStrong` hits; populated in Step 7a
 - `summary.autoModerateEvents` — deduplicated event codes across all `autoModerate` hits; populated in Step 7a
-- `summary.autoWeakEvents` — deduplicated event codes across all `autoWeak` hits; populated in Step 7a
 - `summary.confNoMatchEvents` — deduplicated event codes across all `confNoMatch` hits; populated in Step 7a
 - An event code may appear in multiple `summary.*` arrays if it occurs on hits with different `match` values. Each `summary.*` array is deduped within itself, not across the others.
 - `riskScore` and `riskLevel` are `null` until Step 7b
@@ -723,22 +720,20 @@ Build a single bulk write of all conflicts-search resolutions seen in Phase A, t
 | `{conResMatch}` | n/a | `confMatch` |
 | `{conResNoMatch}` | n/a | `confNoMatch` |
 | null / other | ≥ `{autoStrongMin}` | `autoStrong` |
-| null / other | ≥ `{autoModerateMin}` and < `{autoStrongMin}` | `autoModerate` |
-| null / other | < `{autoModerateMin}` | `autoWeak` |
+| null / other | < `{autoStrongMin}` | `autoModerate` |
 
-> The `match` field is mutually exclusive per hit — every hit lands in exactly one of the five values. The `summary.*` arrays, however, are populated independently — the same `eventCode` may appear in multiple summary arrays if it occurs on hits classified differently.
+> The `match` field is mutually exclusive per hit — every hit lands in exactly one of the four values. The `summary.*` arrays, however, are populated independently — the same `eventCode` may appear in multiple summary arrays if it occurs on hits classified differently.
 
 - For each party, update its entry in `{moodysHitEvents}[]`:
   - Set `match` and `matchScore` on each hit object
   - Derive `summary.confMatchEvents` — deduplicated event codes across all `confMatch` hits
   - Derive `summary.autoStrongEvents` — deduplicated event codes across all `autoStrong` hits
   - Derive `summary.autoModerateEvents` — deduplicated event codes across all `autoModerate` hits
-  - Derive `summary.autoWeakEvents` — deduplicated event codes across all `autoWeak` hits
   - Derive `summary.confNoMatchEvents` — deduplicated event codes across all `confNoMatch` hits
 
-Total hits per party must equal the sum across all five `match` values.
+Total hits per party must equal the sum across all four `match` values.
 
-**Exit check:** Every hit has `match ∈ {confMatch, autoStrong, autoModerate, autoWeak, confNoMatch}` (no nulls remaining).
+**Exit check:** Every hit has `match ∈ {confMatch, autoStrong, autoModerate, confNoMatch}` (no nulls remaining).
 
 ---
 
@@ -787,7 +782,6 @@ For every party in `{moodysHitEvents}[]`, silently assign each hit to a display 
 - `confMatch` → **Confirmed Match**
 - `autoStrong` → **Auto Strong**
 - `autoModerate` → **Auto Moderate**
-- `autoWeak` → **Auto Weak**
 - `confNoMatch` → **Confirmed No Match**
 
 For errored hits where `moodysGRID` is null due to `moodysError`: assign `match` based on matchScore as normal and note `[enrichment error — event codes unavailable]`.
@@ -802,11 +796,11 @@ Verify that the total assigned hits per party equals `hits[].length` for that pa
 
 #### Render
 
-**Table structure:** Two header rows. The first row has empty cells under Review, Name (ID), Risk Score, and Relationship, and a single spanning header **Risk Events** over the five match columns. The second row contains all nine column labels.
+**Table structure:** Two header rows. The first row has empty cells under Review, Name (ID), Risk Score, and Relationship, and a single spanning header **Risk Events** over the four match columns. The second row contains all eight column labels.
 
-| | | | | Risk Events | | | | |
-|---|---|---|---|---|---|---|---|---|
-| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Confirmed Match** | **Auto Strong** | **Auto Moderate** | **Auto Weak** | **Confirmed No Match** |
+| | | | | Risk Events | | | |
+|---|---|---|---|---|---|---|---|
+| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Confirmed Match** | **Auto Strong** | **Auto Moderate** | **Confirmed No Match** |
 
 **Column definitions:**
 - **Review** — a single letter (A, B, C, …) assigned to every party in the table in render order. Used by the Step 8 prompt to select a party to review.
@@ -816,7 +810,6 @@ Verify that the total assigned hits per party equals `hits[].length` for that pa
 - **Confirmed Match** — all hits where `match = confMatch`
 - **Auto Strong** — all hits where `match = autoStrong`
 - **Auto Moderate** — all hits where `match = autoModerate`
-- **Auto Weak** — all hits where `match = autoWeak`
 - **Confirmed No Match** — all hits where `match = confNoMatch`
 
 Per cell:
@@ -830,16 +823,16 @@ Per cell:
 
 4. Render `—` when no hits of that match value exist for that party
 
-**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in all five Risk Event columns and `-` in Risk Score in that case. Related parties follow, sorted by `riskScore` descending. Letters are assigned in this rendered order: client = A, next party = B, and so on.
+**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in all four Risk Event columns and `-` in Risk Score in that case. Related parties follow, sorted by `riskScore` descending. Letters are assigned in this rendered order: client = A, next party = B, and so on.
 
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
 
-| | | | | Risk Events | | | | |
-|---|---|---|---|---|---|---|---|---|
-| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Confirmed Match** | **Auto Strong** | **Auto Moderate** | **Auto Weak** | **Confirmed No Match** |
-| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{confMatchSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{autoStrongSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{autoModerateSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{autoWeakSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{confNoMatchSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* |
-| **B** | 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | — | — | **{autoModerateSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | — | — |
+| | | | | Risk Events | | | |
+|---|---|---|---|---|---|---|---|
+| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Confirmed Match** | **Auto Strong** | **Auto Moderate** | **Confirmed No Match** |
+| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{confMatchSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{autoStrongSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{autoModerateSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{confNoMatchSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* |
+| **B** | 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | — | — | **{autoModerateSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | — |
 
 #### Prompt
 
@@ -872,7 +865,7 @@ Entered from Step 8 with a single `{partyId}` selected by the user. Step 9 only 
 
 Render **Appendix J** for the selected `{partyId}` with one change: add a leftmost **Hit** column containing a letter (A, B, C, …) assigned to every hit in render order.
 
-**Hit letter assignment rule:** Hits are ordered Confirmed Match first, then Auto Strong, then Auto Moderate, then Auto Weak, then Confirmed No Match. Within each group, sort by `gridId` ascending for stability. Letter A goes to the first hit, B to the second, and so on.
+**Hit letter assignment rule:** Hits are ordered Confirmed Match first, then Auto Strong, then Auto Moderate, then Confirmed No Match. Within each group, sort by `gridId` ascending for stability. Letter A goes to the first hit, B to the second, and so on.
 
 Augment each row with a **Current Resolution** column showing the hit's existing resolution if one is already stored in external data (i.e. `hits[].resolution` is non-null). Display `—` if no prior resolution exists.
 
@@ -882,8 +875,8 @@ Augment each row with a **Current Resolution** column showing the hit's existing
 
 | Hit | Moody's GRID Hit | Name Match Score | Match Type | Current Resolution | Risk Events (Risk Score Contribution) | Total Contribution to Risk Score |
 |---|---|---|---|---|---|---|
-| **A** | {gridName} (`{gridId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Auto Weak / Confirmed No Match | {resolution or —} | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
-| **B** | {gridName} (`{gridId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Auto Weak / Confirmed No Match | {resolution or —} | • {CODE} — {Label} +{value} | +{total} |
+| **A** | {gridName} (`{gridId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Confirmed No Match | {resolution or —} | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
+| **B** | {gridName} (`{gridId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Confirmed No Match | {resolution or —} | • {CODE} — {Label} +{value} | +{total} |
 
 **Total: {riskScore} {riskLevel}**
 
@@ -961,15 +954,13 @@ For each unique `partyId` in `{moodysHitEvents}[]`:
 | `dateComplete` | Today's date/time, ISO 8601 (e.g. `2026-04-24T18:50:44Z`) |
 | `reqID` | `{reqID}` |
 | `riskScore` | `"{moodysHitEvents}[i].riskLevel ({moodysHitEvents}[i].riskScore)"` — use `"None"` if `riskScore` = 0 or null |
-| `riskEvents` | Comma-separated deduplicated codes across **all five** summary arrays (`confMatchEvents` + `autoStrongEvents` + `autoModerateEvents` + `autoWeakEvents` + `confNoMatchEvents`), or `"None"` |
+| `riskEvents` | Comma-separated deduplicated codes across **all four** summary arrays (`confMatchEvents` + `autoStrongEvents` + `autoModerateEvents` + `confNoMatchEvents`), or `"None"` |
 | `confMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'confMatch'`, deduplicated, or `"None"` |
 | `confMatchIds` | Comma-separated `gridIds` where `hits[].match = 'confMatch'`, or empty |
 | `strongMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'autoStrong'`, deduplicated, or `"None"` |
 | `strongMatchIds` | Comma-separated `gridIds` where `hits[].match = 'autoStrong'`, or empty |
 | `modMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'autoModerate'`, deduplicated, or `"None"` |
 | `modMatchIds` | Comma-separated `gridIds` where `hits[].match = 'autoModerate'`, or empty |
-| `weakMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'autoWeak'`, deduplicated, or `"None"` |
-| `weakMatchIds` | Comma-separated `gridIds` where `hits[].match = 'autoWeak'`, or empty |
 | `confNoMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'confNoMatch'`, deduplicated, or `"None"` |
 | `confNoMatchIds` | Comma-separated `gridIds` where `hits[].match = 'confNoMatch'`, or empty |
 | `ranForClient` | `"{clientPartyName} ({clientPartyId})"` — same value for every party in this loop |
@@ -1146,7 +1137,6 @@ For each hit in the party's `hits[]`:
    - `confMatch` → **Confirmed Match**
    - `autoStrong` → **Auto Strong**
    - `autoModerate` → **Auto Moderate**
-   - `autoWeak` → **Auto Weak**
    - `confNoMatch` → **Confirmed No Match**
 
 2. For each `eventCode` on the hit, look up the integer at `(code row, classification column)` in **Appendix H**.
@@ -1157,7 +1147,7 @@ For each hit in the party's `hits[]`:
 
 Sum all hit contributions for the party. If the total exceeds `100`, set `riskScore = 100`. Otherwise, `riskScore` equals the sum.
 
-> Note: Codes valued `100` in Appendix H (e.g. PEP, SNX, IRC, MLA) on a `confMatch` or `autoStrong` hit will, on their own, push the party to the cap and produce 🔴 High. `autoWeak` and `confNoMatch` contribute `0` for every code and never affect the total.
+> Note: Codes valued `100` in Appendix H (e.g. PEP, SNX, IRC, MLA) on a `confMatch` or `autoStrong` hit will, on their own, push the party to the cap and produce 🔴 High. `confNoMatch` contributes `0` for every code and never affects the total. `autoModerate` contributes the configured per-code value in Appendix H — tune that column to control how heavily lower-confidence matches weigh in.
 
 #### Score-to-level conversion
 
@@ -1374,67 +1364,66 @@ Lookup table for every Moody's GRID event category code returned by enrichment. 
 - **Label** — the human-readable description of the event code.
 - **Confirmed Match** — points added per occurrence when a hit has `match = confMatch` (user-confirmed as `{conResMatch}`).
 - **Auto Strong** — points added per occurrence when a hit has `match = autoStrong` (auto-classified as a likely match, name match score ≥ `{autoStrongMin}`).
-- **Auto Moderate** — points added per occurrence when a hit has `match = autoModerate` (auto-classified as a possible match, name match score between `{autoModerateMin}` and `{autoStrongMin}`).
-- **Auto Weak** — points added per occurrence when a hit has `match = autoWeak` (auto-classified as unlikely, name match score < `{autoModerateMin}`). Always 0 — shown for analyst visibility only.
+- **Auto Moderate** — points added per occurrence when a hit has `match = autoModerate` (auto-classified as a possible match, name match score < `{autoStrongMin}`). Tune this column to control how heavily lower-confidence matches weigh in — values below are the defaults from the previous Auto Moderate band; setting them to `0` reproduces the old "weak" behaviour.
 - **Confirmed No Match** — points added per occurrence when a hit has `match = confNoMatch` (user-confirmed as `{conResNoMatch}`). Always 0.
 
 
-| Code | Label | Confirmed Match | Auto Strong | Auto Moderate | Auto Weak | Confirmed No Match |
-|---|---|---|---|---|---|---|
-| ABU | Abuse (Domestic, Elder, Child) | 1 | 1 | 0 | 0 | 0 |
-| ARS | Arson | 3 | 3 | 1 | 0 | 0 |
-| AST | Assault, Battery | 3 | 3 | 1 | 0 | 0 |
-| BLK | Firm Specific Blocked List | 100 | 100 | 10 | 0 | 0 |
-| BRB | Bribery, Graft, Kickbacks, Political Corruption | 5 | 5 | 2 | 0 | 0 |
-| BUR | Burglary | 3 | 3 | 1 | 0 | 0 |
-| BUS | Business Crimes (Antitrust, Bankruptcy, Price Fixing) | 5 | 5 | 2 | 0 | 0 |
-| CFT | Counterfeiting, Forgery | 5 | 5 | 2 | 0 | 0 |
-| CON | Conspiracy (no specific crime named) | 3 | 3 | 1 | 0 | 0 |
-| CPR | Copyright Infringement (Intellectual Property, Electronic Piracy) | 1 | 1 | 0 | 0 | 0 |
-| CYB | Computer Related, Cyber Crime | 5 | 5 | 2 | 0 | 0 |
-| DEN | Denied Entity | 100 | 100 | 10 | 0 | 0 |
-| DPS | Possession of Drugs or Drug Paraphernalia | 3 | 3 | 1 | 0 | 0 |
-| DTF | Trafficking or Distribution of Drug | 5 | 5 | 2 | 0 | 0 |
-| ENV | Environmental Crimes (Poaching, Illegal Logging, Animal Cruelty) | 5 | 5 | 2 | 0 | 0 |
-| FOF | Former OFAC List | 100 | 100 | 10 | 0 | 0 |
-| FOR | Forfeiture | 3 | 3 | 1 | 0 | 0 |
-| FOS | Former Sanctions | 100 | 100 | 10 | 0 | 0 |
-| FRD | Fraud, Scams, Swindles | 5 | 5 | 2 | 0 | 0 |
-| FUG | Fugitive, Escape | 5 | 5 | 2 | 0 | 0 |
-| GAM | Illegal Gambling | 5 | 5 | 2 | 0 | 0 |
-| HUM | Human Rights, Genocide, War Crimes | 5 | 5 | 2 | 0 | 0 |
-| IGN | Possession or Sale of Guns, Weapons and Explosives | 3 | 3 | 1 | 0 | 0 |
-| IMP | Identity Theft, Impersonation | 5 | 5 | 2 | 0 | 0 |
-| IPR | Illegal Prostitution | 1 | 1 | 0 | 0 | 0 |
-| IRC | Iran Connect | 100 | 100 | 10 | 0 | 0 |
-| KID | Kidnapping, Abduction, Held Against Will | 5 | 5 | 2 | 0 | 0 |
-| LMD | Legal Marijuana Dispensaries | 5 | 5 | 2 | 0 | 0 |
-| LNS | Loan Sharking, Usury, Predatory Lending | 5 | 5 | 2 | 0 | 0 |
-| MIS | Misconduct | 1 | 1 | 0 | 0 | 0 |
-| MLA | Money Laundering | 100 | 100 | 10 | 0 | 0 |
-| MOR | Mortgage Related | 5 | 5 | 2 | 0 | 0 |
-| MSB | Money Services Business | 5 | 5 | 2 | 0 | 0 |
-| MUR | Murder, Manslaughter (Committed, Planned or Attempted) | 5 | 5 | 2 | 0 | 0 |
-| NSC | Nonspecific Crime | 1 | 1 | 0 | 0 | 0 |
-| OBS | Obscenity Related, Child Pornography | 5 | 5 | 2 | 0 | 0 |
-| ORG | Organized Crime, Criminal Association, Racketeering | 100 | 100 | 10 | 0 | 0 |
-| PEP | Politically Exposed Person | 100 | 100 | 10 | 0 | 0 |
-| PRJ | Perjury, Obstruction of Justice, False Filings, False Statements | 5 | 5 | 2 | 0 | 0 |
-| PSP | Possession of Stolen Property | 3 | 3 | 1 | 0 | 0 |
-| REG | Regulatory Action | 5 | 5 | 2 | 0 | 0 |
-| RES | Real Estate Actions | 5 | 5 | 2 | 0 | 0 |
-| ROB | Robbery (Stealing by Threat, Use of Force) | 3 | 3 | 1 | 0 | 0 |
-| SEC | SEC Violations (Insider Trading, Securities Fraud) | 5 | 5 | 2 | 0 | 0 |
-| SEX | Sex Offenses (Rape, Sodomy, Sexual Abuse, Pedophilia) | 5 | 5 | 2 | 0 | 0 |
-| SMG | Smuggling (Does not include Drugs, Money, People or Guns) | 5 | 5 | 2 | 0 | 0 |
-| SNX | Sanctions Connect | 100 | 100 | 10 | 0 | 0 |
-| SPY | Spying (Treason, Espionage) | 5 | 5 | 2 | 0 | 0 |
-| TAX | Tax Related Offenses | 5 | 5 | 2 | 0 | 0 |
-| TER | Terrorist Related | 100 | 100 | 10 | 0 | 0 |
-| TFT | Theft (Larceny, Misappropriation, Embezzlement, Extortion) | 5 | 5 | 2 | 0 | 0 |
-| TRF | People Trafficking, Organ Trafficking | 5 | 5 | 2 | 0 | 0 |
-| VCY | Virtual Currency | 5 | 5 | 2 | 0 | 0 |
-| WLT | Watchlisted Entities | 100 | 100 | 10 | 0 | 0 |
+| Code | Label | Confirmed Match | Auto Strong | Auto Moderate | Confirmed No Match |
+|---|---|---|---|---|---|
+| ABU | Abuse (Domestic, Elder, Child) | 1 | 1 | 0 | 0 |
+| ARS | Arson | 3 | 3 | 1 | 0 |
+| AST | Assault, Battery | 3 | 3 | 1 | 0 |
+| BLK | Firm Specific Blocked List | 100 | 100 | 10 | 0 |
+| BRB | Bribery, Graft, Kickbacks, Political Corruption | 5 | 5 | 2 | 0 |
+| BUR | Burglary | 3 | 3 | 1 | 0 |
+| BUS | Business Crimes (Antitrust, Bankruptcy, Price Fixing) | 5 | 5 | 2 | 0 |
+| CFT | Counterfeiting, Forgery | 5 | 5 | 2 | 0 |
+| CON | Conspiracy (no specific crime named) | 3 | 3 | 1 | 0 |
+| CPR | Copyright Infringement (Intellectual Property, Electronic Piracy) | 1 | 1 | 0 | 0 |
+| CYB | Computer Related, Cyber Crime | 5 | 5 | 2 | 0 |
+| DEN | Denied Entity | 100 | 100 | 10 | 0 |
+| DPS | Possession of Drugs or Drug Paraphernalia | 3 | 3 | 1 | 0 |
+| DTF | Trafficking or Distribution of Drug | 5 | 5 | 2 | 0 |
+| ENV | Environmental Crimes (Poaching, Illegal Logging, Animal Cruelty) | 5 | 5 | 2 | 0 |
+| FOF | Former OFAC List | 100 | 100 | 10 | 0 |
+| FOR | Forfeiture | 3 | 3 | 1 | 0 |
+| FOS | Former Sanctions | 100 | 100 | 10 | 0 |
+| FRD | Fraud, Scams, Swindles | 5 | 5 | 2 | 0 |
+| FUG | Fugitive, Escape | 5 | 5 | 2 | 0 |
+| GAM | Illegal Gambling | 5 | 5 | 2 | 0 |
+| HUM | Human Rights, Genocide, War Crimes | 5 | 5 | 2 | 0 |
+| IGN | Possession or Sale of Guns, Weapons and Explosives | 3 | 3 | 1 | 0 |
+| IMP | Identity Theft, Impersonation | 5 | 5 | 2 | 0 |
+| IPR | Illegal Prostitution | 1 | 1 | 0 | 0 |
+| IRC | Iran Connect | 100 | 100 | 10 | 0 |
+| KID | Kidnapping, Abduction, Held Against Will | 5 | 5 | 2 | 0 |
+| LMD | Legal Marijuana Dispensaries | 5 | 5 | 2 | 0 |
+| LNS | Loan Sharking, Usury, Predatory Lending | 5 | 5 | 2 | 0 |
+| MIS | Misconduct | 1 | 1 | 0 | 0 |
+| MLA | Money Laundering | 100 | 100 | 10 | 0 |
+| MOR | Mortgage Related | 5 | 5 | 2 | 0 |
+| MSB | Money Services Business | 5 | 5 | 2 | 0 |
+| MUR | Murder, Manslaughter (Committed, Planned or Attempted) | 5 | 5 | 2 | 0 |
+| NSC | Nonspecific Crime | 1 | 1 | 0 | 0 |
+| OBS | Obscenity Related, Child Pornography | 5 | 5 | 2 | 0 |
+| ORG | Organized Crime, Criminal Association, Racketeering | 100 | 100 | 10 | 0 |
+| PEP | Politically Exposed Person | 100 | 100 | 10 | 0 |
+| PRJ | Perjury, Obstruction of Justice, False Filings, False Statements | 5 | 5 | 2 | 0 |
+| PSP | Possession of Stolen Property | 3 | 3 | 1 | 0 |
+| REG | Regulatory Action | 5 | 5 | 2 | 0 |
+| RES | Real Estate Actions | 5 | 5 | 2 | 0 |
+| ROB | Robbery (Stealing by Threat, Use of Force) | 3 | 3 | 1 | 0 |
+| SEC | SEC Violations (Insider Trading, Securities Fraud) | 5 | 5 | 2 | 0 |
+| SEX | Sex Offenses (Rape, Sodomy, Sexual Abuse, Pedophilia) | 5 | 5 | 2 | 0 |
+| SMG | Smuggling (Does not include Drugs, Money, People or Guns) | 5 | 5 | 2 | 0 |
+| SNX | Sanctions Connect | 100 | 100 | 10 | 0 |
+| SPY | Spying (Treason, Espionage) | 5 | 5 | 2 | 0 |
+| TAX | Tax Related Offenses | 5 | 5 | 2 | 0 |
+| TER | Terrorist Related | 100 | 100 | 10 | 0 |
+| TFT | Theft (Larceny, Misappropriation, Embezzlement, Extortion) | 5 | 5 | 2 | 0 |
+| TRF | People Trafficking, Organ Trafficking | 5 | 5 | 2 | 0 |
+| VCY | Virtual Currency | 5 | 5 | 2 | 0 |
+| WLT | Watchlisted Entities | 100 | 100 | 10 | 0 |
 
 ---
 
@@ -1450,8 +1439,8 @@ Lookup table for every Moody's GRID event category code returned by enrichment. 
 
 | Moody's GRID Hit | Name Match Score | Match Type | Risk Events (Risk Score Contribution) | Total Contribution to Risk Score |
 |---|---|---|---|---|
-| {gridName} (`{resultId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Auto Weak / Confirmed No Match | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
-| {gridName} (`{resultId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Auto Weak / Confirmed No Match | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +0 | +{total} |
+| {gridName} (`{resultId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Confirmed No Match | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
+| {gridName} (`{resultId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Confirmed No Match | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +0 | +{total} |
 
 **Total: {riskScore} {riskLevel}**
 
@@ -1481,14 +1470,14 @@ Records each party's own AML/KYC risk score from each run.
 | `strongMatchIds` | Risk Ids - Auto Strong | String |
 | `modMatchEvents` | Risk Events - Auto Moderate | String |
 | `modMatchIds` | Risk Ids - Auto Moderate | String |
-| `weakMatchEvents` | Risk Events - Auto Weak | String |
-| `weakMatchIds` | Risk Ids - Auto Weak | String |
 | `confNoMatchEvents` | Risk Events - Confirmed No Match | String |
 | `confNoMatchIds` | Risk Ids - Confirmed No Match | String |
 | `ranForClient` | Ran for Client | String — `"{clientPartyName} ({clientPartyId})"` |
 | `relationship` | Relationship to Client | String — e.g. `"GUO, Parent"` or `"Client"` |
 
-> `ranForClient`, `relationship`, and the per-match event/ID columns (`confMatchEvents`, `confMatchIds`, `strongMatchEvents`, `strongMatchIds`, `modMatchEvents`, `modMatchIds`, `weakMatchEvents`, `weakMatchIds`, `confNoMatchEvents`, `confNoMatchIds`) must be added to the table schema in the Intapp form designer before they can be written via the API.
+> `ranForClient`, `relationship`, and the per-match event/ID columns (`confMatchEvents`, `confMatchIds`, `strongMatchEvents`, `strongMatchIds`, `modMatchEvents`, `modMatchIds`, `confNoMatchEvents`, `confNoMatchIds`) must be added to the table schema in the Intapp form designer before they can be written via the API.
+>
+> **Migration note:** The `weakMatchEvents` and `weakMatchIds` columns from prior playbook versions are no longer written. Existing schema columns can be left in place (writes simply omit them) or removed in the form designer at your discretion. Historical `_moodyAgentRuns` rows containing those cells remain valid — unknown cell keys are ignored on read.
 
 ---
 
