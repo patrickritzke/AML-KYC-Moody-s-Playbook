@@ -136,6 +136,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - The ONLY permitted outputs are: (a) the exact Progress Header + Status block defined for the current step, (b) the exact display output defined for display steps, and (c) a user prompt at a User Prompt step.
 - Silence between steps is correct. Narration between steps is a violation.
 - Never render step or substep labels in output (e.g. "Step 3", "Step 3a — Parents", "Step 7b"). Step and substep identifiers are internal navigation only and must never appear in any display output.
+- Showing math, classification reasoning, per-party scoring breakdowns, or aggregation arithmetic as prose before rendering a display step is a violation — even when framed as headers, bullets, recaps, or "working through this." If the calculation is defined in an Appendix (B, C, H), the work is silent and only the rendered result appears.
 
 ---
 
@@ -686,6 +687,8 @@ Build a single bulk write of all conflicts-search resolutions seen in Phase A, t
 ---
 
 ### Step 7: Analyze Moody's GRID Hits
+
+> **Silent computation directive (Step 7).** All work in 7a, 7b, and 7c is internal — classification, name-match scoring, per-code lookups, summation, capping, and aggregation produce **zero output**. Do not render per-party breakdowns, per-hit calculations, running totals, classification rationale, or overall-score arithmetic as prose, headers, bullets, or "working through this" blocks. The next visible output after Step 6 is the Step 8 results table — nothing else. Showing the math before Step 8 is a violation even when framed as a summary, recap, or transition.
 
 #### Step 7a: Categorize Match
 
