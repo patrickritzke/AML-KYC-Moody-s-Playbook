@@ -41,6 +41,8 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `{clientPartyExternalId}` — External ID of the client (e.g. Moody's GRID ID)
 - `{clientPartyExternalIdProvider}` — Provider that issued the external ID
 - `{clientPartyLastScore}` — Last Overall Risk Score from  "_moodyAgentScore"
+- `{clientPartyLastScoreLevel}` — Derived risk level for `{clientPartyLastScore}` per Appendix C thresholds (`High` / `Medium` / `Low` / `None`)
+- `{clientPartyLastScoreIcon}` — Derived icon for `{clientPartyLastScoreLevel}` per Appendix A (`🔴` / `🟠` / `🔘` / *(none)*)
 - `{clientPartyLastScoreDate}` — Last Overall Risk Score Date from `_moodyAgentLast`. Format as date-only (YYYY-MM-DD) for display — strip the time component from the ISO 8601 timestamp (e.g. `2026-04-22T05:00:00.0000000Z` → `2026-04-22`).
 
 ### Corporate Structure Relationships
@@ -72,6 +74,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 ### Overall Risk
 - `{overallRiskScore}` — set by playbook (Step 7c)
 - `{overallRiskLevel}` — set by playbook (Step 7c)
+- `{overallRiskIcon}` — derived icon for `{overallRiskLevel}` per Appendix A (`🔴` / `🟠` / `🔘` / *(none)*). Used only in user-facing displays.
 
 ### Moody's GRID Matches
 - `{moodysHitEvents}` — Array of screened party risk objects, one entry per search party. Populated in Step 6, classified and scored in Steps 7a and 7b.
@@ -114,6 +117,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `summary.confNoMatchEvents` — deduplicated event codes across all `confNoMatch` hits; populated in Step 7a
 - An event code may appear in multiple `summary.*` arrays if it occurs on hits with different `match` values. Each `summary.*` array is deduped within itself, not across the others.
 - `riskScore` and `riskLevel` are `null` until Step 7b
+- `{riskIcon}` — derived display-only icon for each entry's `riskLevel` per Appendix A (`🔴` / `🟠` / `🔘` / *(none)*). Used in Step 8 / Step 9 / Appendix J renders only — never persisted.
 - `hits[].resolution` is sourced from external data (Appendix N), not from the conflicts-search result. The conflicts-search resolution only feeds external data on first sight in Step 6.
 
 ### Moody's Resolution Lookup
@@ -358,7 +362,7 @@ Every output Claude produces during the playbook begins with the current step's 
 
   **🔷 {clientPartyName}` (`{clientPartyId}`)**
   <br>
-  Current Moody's GRID Risk Score: `{clientPartyLastScore}` (`{clientPartyLastScoreDate}`)
+  Current Moody's GRID Risk Score: **{clientPartyLastScoreIcon} {clientPartyLastScoreLevel} ({clientPartyLastScore})** (`{clientPartyLastScoreDate}`)
   <br>
   <br>
   **Corporate Structure Relationships Screening Summary**
@@ -808,7 +812,7 @@ Verify that the total assigned hits per party equals `hits[].length` for that pa
 **Column definitions:**
 - **Review** — a single letter (A, B, C, …) assigned to every party in the table in render order. Used by the Step 8 prompt to select a party to review.
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
-- **Risk Score** — `{riskLevel}` (`{riskScore}`) from Step 7b. If `riskScore` = 0, display `-` with no score value or icon.
+- **Risk Score** — render per the canonical risk score format in Appendix A: **`{icon} {level} ({score})`** bold. If `riskScore` = 0 or null, render **None** (no icon, no parenthetical).
 - **Relationship** — `Client` for the client row; relationship label(s) for all others
 - **Risk Events** — four stacked sections, **always rendered in this exact order regardless of hit count**: Confirmed → Strong Auto Match → Moderate Auto Match → Dismissed
 
@@ -838,7 +842,7 @@ Each of the four sections renders as a bold header line showing the section labe
 - Bulleted code list is deduplicated within the section. The same code may appear in more than one section if it occurs on hits with different `match` values.
 - If the entire party has zero hits across all four sections (only possible for the client when nothing matched), render `—` in the Risk Events cell instead of the four-section block.
 
-**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in the Risk Events cell and `-` in Risk Score in that case. Related parties with at least one hit (across any of the four match types) follow, sorted by `riskScore` descending. Related parties with **zero hits** across all four sections are **excluded from the table** and listed in the no-hits footnote below instead. Letters are assigned in this rendered order: client = A, next in-table party = B, and so on — letters are never assigned to parties listed only in the footnote.
+**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in the Risk Events cell and **None** in the Risk Score column in that case (per Appendix A canonical format). Related parties with at least one hit (across any of the four match types) follow, sorted by `riskScore` descending. Related parties with **zero hits** across all four sections are **excluded from the table** and listed in the no-hits footnote below instead. Letters are assigned in this rendered order: client = A, next in-table party = B, and so on — letters are never assigned to parties listed only in the footnote.
 
 **No-hits footnote:** Immediately below the table (and above the prompt), if any related parties were excluded for having zero hits, render a single italic line:
 
@@ -847,12 +851,12 @@ Each of the four sections renders as a bold header line showing the section labe
 Sort the names alphabetically. Omit the line entirely when every related party has at least one hit. The client is never included in this footnote — even with zero hits, the client is rendered in the table.
 
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
-> ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
+> ## Overall Risk Score: **{overallRiskIcon} {overallRiskLevel} ({overallRiskScore})**
 
 | **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Risk Events** |
 |---|---|---|---|---|
-| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **Confirmed ({n} Hits)**<br>• {CODE}<br>• {CODE}<br><br>**Strong Auto Match ({n} Hits)**<br>• {CODE}<br><br>**Moderate Auto Match (0 Hits)**<br><br>**Dismissed ({n} Hits)**<br>• {CODE} |
-| **B** | 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | **Confirmed (0 Hits)**<br><br>**Strong Auto Match (0 Hits)**<br><br>**Moderate Auto Match ({n} Hits)**<br>• {CODE}<br><br>**Dismissed (0 Hits)** |
+| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | **{riskIcon} {riskLevel} ({riskScore})** | Client | **Confirmed ({n} Hits)**<br>• {CODE}<br>• {CODE}<br><br>**Strong Auto Match ({n} Hits)**<br>• {CODE}<br><br>**Moderate Auto Match (0 Hits)**<br><br>**Dismissed ({n} Hits)**<br>• {CODE} |
+| **B** | 🔹 `{partyName}` (`{partyId}`) | **{riskIcon} {riskLevel} ({riskScore})** | {relationship} | **Confirmed (0 Hits)**<br><br>**Strong Auto Match (0 Hits)**<br><br>**Moderate Auto Match ({n} Hits)**<br>• {CODE}<br><br>**Dismissed (0 Hits)** |
 
 #### Prompt
 
@@ -891,14 +895,14 @@ Augment each row with a **Current Resolution** column showing the hit's existing
 
 **Table structure:**
 
-**{partyName} (`{partyId}`) — Score: {riskScore} {riskLevel}**
+**{partyName} (`{partyId}`) — Score: {riskIcon} {riskLevel} ({riskScore})**
 
 | Hit | Moody's GRID Hit | Name Match Score | Match Type | Current Resolution | Risk Events (Risk Score Contribution) | Total Contribution to Risk Score |
 |---|---|---|---|---|---|---|
 | **A** | {gridName} (`{gridId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Confirmed No Match | {resolution or —} | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
 | **B** | {gridName} (`{gridId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Confirmed No Match | {resolution or —} | • {CODE} — {Label} +{value} | +{total} |
 
-**Total: {riskScore} {riskLevel}**
+**Total: {riskIcon} {riskLevel} ({riskScore})**
 
 ---
 
@@ -1071,7 +1075,7 @@ After the call returns, display:
 
 | Party | Status |
 |---|---|
-| 🔷 `{clientPartyName}` (`{clientPartyId}`) | ✅ Saved Risk Score `{overallRiskLevel} ({overallRiskScore})` - Next Review Scheduled in 6 months `{nextReviewDate}` / ❌ `{error}` |
+| 🔷 `{clientPartyName}` (`{clientPartyId}`) | ✅ Saved Risk Score **{overallRiskIcon} {overallRiskLevel} ({overallRiskScore})** - Next Review Scheduled in 6 months `{nextReviewDate}` / ❌ `{error}` |
 | 🔹 `{partyName}` (`{partyId}`) | ✅ Saved Risk Score / ❌ `{error}` |
 
 ---
@@ -1092,7 +1096,7 @@ Display format (3 lines):
 
 ```
 AML/KYC Initiation
-New Risk Score: {currIcon} {currLevel} ({curr})
+New Risk Score: **{currIcon} {currLevel} ({curr})**
 
 *Action: {action for the matched row only}.*
 ```
@@ -1110,8 +1114,8 @@ New Risk Score: {currIcon} {currLevel} ({curr})
 Display format (4 lines, appended to Step COMPLETE output):
 
 ```
-Previous Risk Score: {prevIcon} {prevLevel} ({prev}) (from ({clientPartyLastScoreDate}))
-New Risk Score: {currIcon} {currLevel} ({curr})
+Previous Risk Score: **{prevIcon} {prevLevel} ({prev})** (from ({clientPartyLastScoreDate}))
+New Risk Score: **{currIcon} {currLevel} ({curr})**
 
 {⬆|⬇|→} **{Headline}**
 *Action: {action for the matched row only}.*
@@ -1139,6 +1143,10 @@ Playbook ended but not completed.
 ### Appendix A: Display Preferences
 - **Risk Scores:** 🔴 High, 🟠 Medium, 🔘 Low, None
   - None if risk score is 0
+- **Risk Score display format (canonical, used everywhere a score is shown to the user):** **`{icon} {level} ({score})`** — always bold. Example: **🔴 High (85)**.
+  - When `riskScore` = 0 or null, render as **None** with no icon and no parenthetical score. Example: **None**.
+  - This format applies in all user-facing risk score displays: Step 2b current score, Step 8 Risk Score column, Step 8 Overall Risk Score line, Step 9 header and total, Appendix J header and total, Step COMPLETE saved-row status, Risk Score Change Headline (initiation and subsequent run).
+  - The format does **not** apply to internal variable schemas, calculation logic, or DataTable cell-key value strings written via `IntappJungle:append_party_table_rows` (those use the legacy `"Level (Score)"` string format defined in Appendix K).
 - **Client Indicator:** 🔷 next to client name
 - **Related Party Indicator:** 🔹 next to party name
 - **New Party Indicator:** 🆕 before 🔹 when `isNew` = `true`
@@ -1455,14 +1463,14 @@ Lookup table for every Moody's GRID event category code returned by enrichment. 
 
 ### Appendix J: Risk Score Reasoning Table
 
-**{partyName} (`{partyId}`) — Score: {riskScore} {riskLevel}**
+**{partyName} (`{partyId}`) — Score: {riskIcon} {riskLevel} ({riskScore})**
 
 | Moody's GRID Hit | Name Match Score | Match Type | Risk Events (Risk Score Contribution) | Total Contribution to Risk Score |
 |---|---|---|---|---|
 | {gridName} (`{resultId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Confirmed No Match | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +{value} | +{total} |
 | {gridName} (`{resultId}`) | {matchScore}% | Confirmed Match / Auto Strong / Auto Moderate / Confirmed No Match | • {CODE} — {Label} +{value}<br>• {CODE} — {Label} +0 | +{total} |
 
-**Total: {riskScore} {riskLevel}**
+**Total: {riskIcon} {riskLevel} ({riskScore})**
 
 ---
 
