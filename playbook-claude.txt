@@ -800,7 +800,12 @@ For errored hits where `moodysGRID` is null due to `moodysError`: assign `match`
 
 Verify that the total assigned hits per party equals `hits[].length` for that party before rendering. If counts do not match, correct before proceeding.
 
-**Pre-render check:** No party row in the table has `relationship` = `"Client"` unless its `partyId` = `{clientPartyId}`. If false, fix upstream in Step 3 / Step 4 before rendering.
+**Pre-render check (in order):**
+1. The client row is the FIRST row in the table. Its `partyId` = `{clientPartyId}` and its `relationship` = `"Client"`. This holds regardless of `riskScore`, hit count, or sort order applied to other rows.
+2. No other row has `relationship` = `"Client"`. If any non-client row carries that label, fix upstream in Step 3 / Step 4 before rendering.
+3. Letter assignment starts at A on the client row, then B, C, … in rendered order for remaining in-table parties.
+
+If check 1 fails, halt rendering and re-sort before output. The client-first rule is absolute — it overrides risk-score-descending sort, alphabetical sort, and any other ordering heuristic.
 
 #### Render
 
@@ -844,7 +849,11 @@ Each of the four sections renders as a bold header line showing the section labe
 - Bulleted code list is deduplicated within the section. The same code may appear in more than one section if it occurs on hits with different `match` values.
 - If a party has zero hits across all four sections, render `—` in the Risk Events cell instead of an empty block. This applies to the client row when nothing matched, and would apply to a related party in the same case — though related parties with zero hits across all sections are excluded from the table per the sort rule and listed in the no-hits footnote instead, so in practice the `—` fallback only ever appears on the client row.
 
-**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in the Risk Events cell and **None** in the Risk Score column in that case (per Appendix A canonical format). Related parties with at least one hit (across any of the four match types) follow, sorted by `riskScore` descending. Related parties with **zero hits** across all four sections are **excluded from the table** and listed in the no-hits footnote below instead. Letters are assigned in this rendered order: client = A, next in-table party = B, and so on — letters are never assigned to parties listed only in the footnote.
+**Sort order:**
+- **Row 1 is always the client.** No exceptions — not when the client has zero hits, not when a related party has a higher score, not ever.
+- Rows 2+ are related parties with at least one hit, sorted by `riskScore` descending.
+- Related parties with zero hits across all four sections are excluded from the table and listed in the no-hits footnote.
+- Letters A, B, C, … assigned in rendered order (client = A always).
 
 **No-hits footnote:** Immediately below the table (and above the prompt), if any related parties were excluded for having zero hits, render a single italic line:
 
