@@ -838,7 +838,13 @@ Each of the four sections renders as a bold header line showing the section labe
 - Bulleted code list is deduplicated within the section. The same code may appear in more than one section if it occurs on hits with different `match` values.
 - If the entire party has zero hits across all four sections (only possible for the client when nothing matched), render `—` in the Risk Events cell instead of the four-section block.
 
-**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in the Risk Events cell and `-` in Risk Score in that case. Related parties follow, sorted by `riskScore` descending. Letters are assigned in this rendered order: client = A, next party = B, and so on.
+**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in the Risk Events cell and `-` in Risk Score in that case. Related parties with at least one hit (across any of the four match types) follow, sorted by `riskScore` descending. Related parties with **zero hits** across all four sections are **excluded from the table** and listed in the no-hits footnote below instead. Letters are assigned in this rendered order: client = A, next in-table party = B, and so on — letters are never assigned to parties listed only in the footnote.
+
+**No-hits footnote:** Immediately below the table (and above the prompt), if any related parties were excluded for having zero hits, render a single italic line:
+
+*No risk event hits for: {partyName1} ({partyId1}), {partyName2} ({partyId2}), …*
+
+Sort the names alphabetically. Omit the line entirely when every related party has at least one hit. The client is never included in this footnote — even with zero hits, the client is rendered in the table.
 
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
