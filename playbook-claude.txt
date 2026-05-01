@@ -779,19 +779,20 @@ Apply the overall scoring rules defined in **Appendix C** using `{moodysHitEvent
 | **Status** | None |
 | **Notification Rule** | Return ONLY the display specified below. Do not add commentary, preamble, or narration of any kind. |
 
-#### Column Assignment (Silent)
+#### Section Assignment (Silent)
 
-For every party in `{moodysHitEvents}[]`, silently assign each hit to a display column based solely on `match`:
-- `confMatch` → **Confirmed Match**
-- `autoStrong` → **Auto Strong**
-- `autoModerate` → **Auto Moderate**
-- `confNoMatch` → **Confirmed No Match**
+For every party in `{moodysHitEvents}[]`, silently group each hit into one of four stacked sections within the single **Risk Events** cell, based solely on `match`:
 
-For errored hits where `moodysGRID` is null due to `moodysError`: assign `match` based on matchScore as normal and note `[enrichment error — event codes unavailable]`.
+- `confMatch` → **Confirmed**
+- `autoStrong` → **Strong Auto Match**
+- `autoModerate` → **Moderate Auto Match**
+- `confNoMatch` → **Dismissed**
 
-> ⚠️ Column placement is determined solely by `match`. Event code severity (including Critical codes such as WLT, SNX, PEP) affects `riskScore` only — it never promotes a hit to a higher-match column. An `autoModerate` hit with WLT goes in **Auto Moderate**, always.
+For errored hits where `moodysGRID` is null due to `moodysError`: assign `match` based on matchScore as normal and note `[enrichment error — event codes unavailable]` in place of the missing event codes.
+
+> ⚠️ Section placement is determined solely by `match`. Event code severity (including Critical codes such as WLT, SNX, PEP) affects `riskScore` only — it never promotes a hit to a higher-match section. An `autoModerate` hit with WLT goes in **Moderate Auto Match**, always.
 >
-> A single event code may render in more than one column for the same party if it appears on hits with different `match` values. Each cell's bold summary line is deduped within that cell only.
+> A single event code may render in more than one section for the same party if it appears on hits with different `match` values. Each section's code list is deduped within that section only — never across sections.
 
 Verify that the total assigned hits per party equals `hits[].length` for that party before rendering. If counts do not match, correct before proceeding.
 
@@ -799,43 +800,53 @@ Verify that the total assigned hits per party equals `hits[].length` for that pa
 
 #### Render
 
-**Table structure:** Two header rows. The first row has empty cells under Review, Name (ID), Risk Score, and Relationship, and a single spanning header **Risk Events** over the four match columns. The second row contains all eight column labels.
+**Table structure:** Single header row. Five columns total. The four match-type breakdowns are stacked vertically inside one **Risk Events** cell per party.
 
-| | | | | Risk Events | | | |
-|---|---|---|---|---|---|---|---|
-| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Confirmed Match** | **Auto Strong** | **Auto Moderate** | **Confirmed No Match** |
+| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Risk Events** |
+|---|---|---|---|---|
 
 **Column definitions:**
 - **Review** — a single letter (A, B, C, …) assigned to every party in the table in render order. Used by the Step 8 prompt to select a party to review.
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
-- **Risk Score** — `{riskLevel}` (`{riskScore}`) from Step 7b. If riskScore = 0, display `-` with no score value or icon.
-- **Relationship** — `Client` for the client row; relationship label for all others
-- **Confirmed Match** — all hits where `match = confMatch`
-- **Auto Strong** — all hits where `match = autoStrong`
-- **Auto Moderate** — all hits where `match = autoModerate`
-- **Confirmed No Match** — all hits where `match = confNoMatch`
+- **Risk Score** — `{riskLevel}` (`{riskScore}`) from Step 7b. If `riskScore` = 0, display `-` with no score value or icon.
+- **Relationship** — `Client` for the client row; relationship label(s) for all others
+- **Risk Events** — four stacked sections, **always rendered in this exact order regardless of hit count**: Confirmed → Strong Auto Match → Moderate Auto Match → Dismissed
 
-Per cell:
-1. **Bold summary line** — deduplicated event codes across all hits assigned to that column only (sourced from the corresponding `summary.*` array)
-2. One blank line
-3. Indented italic hit count:
+**Risk Events cell format:**
 
-   **{event codes}**
+Each of the four sections renders as a bold header line showing the section label and hit count, followed by a bulleted list of deduplicated event codes for hits in that section. Sections are separated by a blank line. The codes-only list is sourced from the corresponding `summary.*` array for that section — codes only, no per-code hit counts, no labels.
 
-   &nbsp;&nbsp;*{n} Moody's profiles*
+```
+**Confirmed ({n} Hits)**
+• {CODE}
+• {CODE}
 
-4. Render `—` when no hits of that match value exist for that party
+**Strong Auto Match ({n} Hits)**
+• {CODE}
+• {CODE}
 
-**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in all four Risk Event columns and `-` in Risk Score in that case. Related parties follow, sorted by `riskScore` descending. Letters are assigned in this rendered order: client = A, next party = B, and so on.
+**Moderate Auto Match ({n} Hits)**
+• {CODE}
+
+**Dismissed ({n} Hits)**
+• {CODE}
+```
+
+**Section rules:**
+- All four sections always appear, even when `{n} = 0`. A zero-hit section renders only the bold header line `**{Section} (0 Hits)**` with no bulleted codes below it.
+- `{n}` = total number of hits in that section for the party (not number of distinct event codes).
+- Bulleted code list is deduplicated within the section. The same code may appear in more than one section if it occurs on hits with different `match` values.
+- If the entire party has zero hits across all four sections (only possible for the client when nothing matched), render `—` in the Risk Events cell instead of the four-section block.
+
+**Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in the Risk Events cell and `-` in Risk Score in that case. Related parties follow, sorted by `riskScore` descending. Letters are assigned in this rendered order: client = A, next party = B, and so on.
 
 > [Request Name (ID)](https://{yourhost}/app/request.aspx?rid={reqID})
 > ## Overall Risk Score: {overallRiskLevel} — {overallRiskScore}
 
-| | | | | Risk Events | | | |
-|---|---|---|---|---|---|---|---|
-| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Confirmed Match** | **Auto Strong** | **Auto Moderate** | **Confirmed No Match** |
-| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **{confMatchSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{autoStrongSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{autoModerateSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | **{confNoMatchSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* |
-| **B** | 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | — | — | **{autoModerateSummary}**<br><br>&nbsp;&nbsp;*{n} Moody's profiles* | — |
+| **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Risk Events** |
+|---|---|---|---|---|
+| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | {riskLevel} {riskScore} | Client | **Confirmed ({n} Hits)**<br>• {CODE}<br>• {CODE}<br><br>**Strong Auto Match ({n} Hits)**<br>• {CODE}<br><br>**Moderate Auto Match (0 Hits)**<br><br>**Dismissed ({n} Hits)**<br>• {CODE} |
+| **B** | 🔹 `{partyName}` (`{partyId}`) | {riskLevel} {riskScore} | {relationship} | **Confirmed (0 Hits)**<br><br>**Strong Auto Match (0 Hits)**<br><br>**Moderate Auto Match ({n} Hits)**<br>• {CODE}<br><br>**Dismissed (0 Hits)** |
 
 #### Prompt
 
