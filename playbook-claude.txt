@@ -755,7 +755,7 @@ Total hits per party must equal the sum across all four `match` values.
 
 For each entry in `{moodysHitEvents}[]`, apply the calculation defined in **Appendix B** to set `riskScore` and `riskLevel`.
 
-**Exit check:** Every entry in `{moodysHitEvents}[]` has non-null `riskScore` and `riskLevel`, and `riskScore` ≤ 100.
+**Exit check:** Every entry in `{moodysHitEvents}[]` has non-null `riskScore` and `riskLevel`, and `riskScore` ≤ 100. Score and level must agree: if `riskScore` ≥ 1, `riskLevel` ∈ {Low, Medium, High} — never `None`. If `riskScore` = 0, `riskLevel` = `None`. A party with at least one Auto Moderate hit on a code valued ≥ 1 in Appendix H cannot exit this step with `riskLevel` = `None`.
 
 ---
 
@@ -817,7 +817,7 @@ If check 1 fails, halt rendering and re-sort before output. The client-first rul
 **Column definitions:**
 - **Review** — a single letter (A, B, C, …) assigned to every party in the table in render order. Used by the Step 8 prompt to select a party to review.
 - **Name (ID)** — party name and ID. Prefix client row with 🔷, related party rows with 🔹
-- **Risk Score** — render per the canonical risk score format in Appendix A: **`{icon} {level} ({score})`** bold. If `riskScore` = 0 or null, render **None** (no icon, no parenthetical).
+- **Risk Score** — render per the canonical risk score format in Appendix A: **`{icon} {level} ({score})`** bold. Render **None** (no icon, no parenthetical) ONLY when `riskLevel` = `None` AND `riskScore` = 0. Never infer None from hit composition, match types, or summary array contents — always read directly from the `riskScore` / `riskLevel` fields set in Step 7b. A party with `riskScore` ≥ 1 always renders with its icon and level, even if every hit is Auto Moderate. Low (1–39) is a real score and must never collapse to None.
 - **Relationship** — `Client` for the client row; relationship label(s) for all others
 - **Risk Events** — four stacked sections, **always rendered in this exact order regardless of hit count**: Confirmed → Strong Auto Match → Moderate Auto Match → Dismissed
 
@@ -988,7 +988,7 @@ For each unique `partyId` in `{moodysHitEvents}[]`:
 |---|---|
 | `dateComplete` | Today's date/time, ISO 8601 (e.g. `2026-04-24T18:50:44Z`) |
 | `reqID` | `{reqID}` |
-| `riskScore` | `"{moodysHitEvents}[i].riskLevel ({moodysHitEvents}[i].riskScore)"` — use `"None"` if `riskScore` = 0 or null |
+| `riskScore` | `"{moodysHitEvents}[i].riskLevel ({moodysHitEvents}[i].riskScore)"` — use `"None"` ONLY if `riskLevel` = `None` AND `riskScore` = 0 |
 | `riskEvents` | Comma-separated deduplicated codes across **all four** summary arrays (`confMatchEvents` + `autoStrongEvents` + `autoModerateEvents` + `confNoMatchEvents`), or `"None"` |
 | `confMatchEvents` | Comma-separated `eventCodes` where `hits[].match = 'confMatch'`, deduplicated, or `"None"` |
 | `confMatchIds` | Comma-separated `gridIds` where `hits[].match = 'confMatch'`, or empty |
@@ -1007,7 +1007,7 @@ For each unique `partyId` in `{moodysHitEvents}[]`:
 |---|---|
 | `dateComplete` | Today's date/time, ISO 8601 (e.g. `2026-04-24T18:50:44Z`) |
 | `reqID` | `{reqID}` |
-| `riskScoreOverall` | `"{overallRiskLevel} ({overallRiskScore})"` — use `"None"` if `overallRiskScore` = 0 or null |
+| `riskScoreOverall` | `"{overallRiskLevel} ({overallRiskScore})"` — use `"None"` ONLY if `overallRiskLevel` = `None` AND `overallRiskScore` = 0 |
 
 ---
 
@@ -1155,7 +1155,8 @@ Playbook ended but not completed.
 - **Risk Scores:** 🔴 High, 🟠 Medium, 🔘 Low, None
   - None if risk score is 0
 - **Risk Score display format (canonical, used everywhere a score is shown to the user):** **`{icon} {level} ({score})`** — always bold. Example: **🔴 High (85)**.
-  - When `riskScore` = 0 or null, render as **None** with no icon and no parenthetical score. Example: **None**.
+  - Render as **None** (no icon, no parenthetical) ONLY when `riskLevel` = `None` AND `riskScore` = 0. Example: **None**.
+  - Always read `riskScore` and `riskLevel` directly from the entry — never infer None from hit composition, match types, or summary array contents. A score of 1 or higher always renders with its icon and level, even if every contributing hit is Auto Moderate.
   - This format applies in all user-facing risk score displays: Step 2b current score, Step 8 Risk Score column, Step 8 Overall Risk Score line, Step 9 header and total, Appendix J header and total, Step COMPLETE saved-row status, Risk Score Change Headline (initiation and subsequent run).
   - The format does **not** apply to internal variable schemas, calculation logic, or DataTable cell-key value strings written via `IntappJungle:append_party_table_rows` (those use the legacy `"Level (Score)"` string format defined in Appendix K).
 - **Client Indicator:** 🔷 next to client name
