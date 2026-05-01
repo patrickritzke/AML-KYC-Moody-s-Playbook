@@ -821,26 +821,28 @@ Verify that the total assigned hits per party equals `hits[].length` for that pa
 Each of the four sections renders as a bold header line showing the section label and hit count, followed by a bulleted list of deduplicated event codes for hits in that section. Sections are separated by a blank line. The codes-only list is sourced from the corresponding `summary.*` array for that section — codes only, no per-code hit counts, no labels.
 
 ```
-**Confirmed ({n} Hits)**
-• {CODE}
-• {CODE}
+**Confirmed** ({n} Hits)
+- {CODE}
+- {CODE}
 
-**Strong Auto Match ({n} Hits)**
-• {CODE}
-• {CODE}
+**Strong Auto Match** ({n} Hits)
+- {CODE}
+- {CODE}
 
-**Moderate Auto Match ({n} Hits)**
-• {CODE}
+**Moderate Auto Match** ({n} Hits)
+- {CODE}
 
-**Dismissed ({n} Hits)**
-• {CODE}
+**Dismissed** ({n} Hits)
+- {CODE}
 ```
 
 **Section rules:**
-- All four sections always appear, even when `{n} = 0`. A zero-hit section renders only the bold header line `**{Section} (0 Hits)**` with no bulleted codes below it.
+- Sections with `{n} = 0` are **omitted entirely** — no header line, no bulleted codes. Only sections with at least one hit render.
+- The four sections that do render always appear in this fixed order: Confirmed → Strong Auto Match → Moderate Auto Match → Dismissed. Skipping a zero-hit section never reorders the remaining sections.
+- Sections are separated by a blank line. When a zero-hit section is skipped, the blank line is also dropped — adjacent rendered sections sit one blank line apart, never two.
 - `{n}` = total number of hits in that section for the party (not number of distinct event codes).
 - Bulleted code list is deduplicated within the section. The same code may appear in more than one section if it occurs on hits with different `match` values.
-- If the entire party has zero hits across all four sections (only possible for the client when nothing matched), render `—` in the Risk Events cell instead of the four-section block.
+- If a party has zero hits across all four sections, render `—` in the Risk Events cell instead of an empty block. This applies to the client row when nothing matched, and would apply to a related party in the same case — though related parties with zero hits across all sections are excluded from the table per the sort rule and listed in the no-hits footnote instead, so in practice the `—` fallback only ever appears on the client row.
 
 **Sort order:** The client row is **always first** in the table regardless of hit count or score, with `relationship = "Client"`. Render it even if the client has zero hits — show `—` in the Risk Events cell and **None** in the Risk Score column in that case (per Appendix A canonical format). Related parties with at least one hit (across any of the four match types) follow, sorted by `riskScore` descending. Related parties with **zero hits** across all four sections are **excluded from the table** and listed in the no-hits footnote below instead. Letters are assigned in this rendered order: client = A, next in-table party = B, and so on — letters are never assigned to parties listed only in the footnote.
 
@@ -855,8 +857,8 @@ Sort the names alphabetically. Omit the line entirely when every related party h
 
 | **Review** | **Name (ID)** | **Risk Score** | **Relationship** | **Risk Events** |
 |---|---|---|---|---|
-| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | **{riskIcon} {riskLevel} ({riskScore})** | Client | **Confirmed ({n} Hits)**<br>• {CODE}<br>• {CODE}<br><br>**Strong Auto Match ({n} Hits)**<br>• {CODE}<br><br>**Moderate Auto Match (0 Hits)**<br><br>**Dismissed ({n} Hits)**<br>• {CODE} |
-| **B** | 🔹 `{partyName}` (`{partyId}`) | **{riskIcon} {riskLevel} ({riskScore})** | {relationship} | **Confirmed (0 Hits)**<br><br>**Strong Auto Match (0 Hits)**<br><br>**Moderate Auto Match ({n} Hits)**<br>• {CODE}<br><br>**Dismissed (0 Hits)** |
+| **A** | 🔷 `{clientPartyName}` (`{clientPartyId}`) | **{riskIcon} {riskLevel} ({riskScore})** | Client | **Confirmed** ({n} Hits)<br>• {CODE}<br>• {CODE}<br><br>**Strong Auto Match** ({n} Hits)<br>• {CODE}<br><br>**Dismissed** ({n} Hits)<br>• {CODE} |
+| **B** | 🔹 `{partyName}` (`{partyId}`) | **{riskIcon} {riskLevel} ({riskScore})** | {relationship} | **Moderate Auto Match** ({n} Hits)<br>• {CODE} |
 
 #### Prompt
 
