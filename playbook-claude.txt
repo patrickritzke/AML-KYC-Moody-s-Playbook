@@ -35,6 +35,11 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 - `{autoStrongMin}` = `0.70`  — minimum matchScore for an unresolved hit to be classified `autoStrong`. Anything below this threshold (and not confirmed by the user) is classified `autoModerate`.
 - `{moodyResolutionSourceType}` = `"moodyAgentExternal"` — `externalSourceType` used for all Moody's GRID resolution records in external data
 
+### Request
+- `{reqStateClient}`               = `"Client"`
+- `{reqStateCorpRelationships}`    = `"Corporate Relationships"`
+- `{reqStateScreening}`            = `"Screening"`
+
 ### Client Party
 - `{clientPartyId}` — Intapp party ID of the client
 - `{clientPartyName}` — Display name of the client
