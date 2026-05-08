@@ -283,6 +283,54 @@ Every output Claude produces during the playbook begins with the current step's 
 
 ## Workflow Steps
 
+---
+
+### Step 0: Resolve Inputs
+
+| Field | Value |
+|---|---|
+| **Type** | Processing |
+| **Progress Header** | None |
+| **Status** | None |
+| **Notification Rule** | Zero output permitted during this step. No commentary, no narration, no acknowledgement of what was passed in. |
+
+Hydrate as many input variables as possible from the invocation. Decide where to enter the playbook at the bottom based on what was successfully hydrated.
+
+#### Hydration
+
+- Inspect the invocation for a passed-in `{reqID}`.
+- If `{reqID}` is **not** present → skip hydration. All client variables remain unset.
+- If `{reqID}` **is** present:
+  - Call `IntappApp:get_request` with `{reqID}`. If the call fails → leave client variables unset and proceed to routing.
+  - From the response's `answers[]`, locate the client party answer using these criteria in order:
+    1. `questionType` = `"PartyLookup"` AND `requestPartyAnswer.partyId` is non-null
+    2. If multiple match, prefer the answer where `questionName` (case-insensitive) is `"client"` or `"Party"`
+    3. If still ambiguous, take the first match
+  - If a matching answer is found, hydrate from its `requestPartyAnswer` object:
+    - `{clientPartyId}` ← `requestPartyAnswer.partyId`
+    - `{clientPartyName}` ← `requestPartyAnswer.entityName`
+    - `{clientPartyExternalIdProvider}` ← `requestPartyAnswer.companyDetails.primaryExternalDataProvider`
+    - `{clientPartyExternalId}` ← `requestPartyAnswer.companyDetails.externalProviderIds[{clientPartyExternalIdProvider}]`
+  - If no matching answer is found → leave client variables unset.
+  - If `{clientPartyId}` was hydrated, call `intappCommon:get_party` with `{clientPartyId}` to hydrate agent-managed fields:
+    - `{clientPartyLastScore}` ← `_moodyAgentScore`
+    - `{clientPartyLastScoreDate}` ← `_moodyAgentLast` (strip time component, format YYYY-MM-DD)
+    - Derive `{clientPartyLastScoreLevel}` and `{clientPartyLastScoreIcon}` per Appendix C thresholds and Appendix A icons.
+  - If `get_party` fails → leave the agent-managed fields unset; do not halt.
+
+#### Routing
+
+After hydration, route based on what's set:
+
+- If `{clientPartyId}` AND `{clientPartyName}` are both non-null → **GO TO** Step 2.
+- Otherwise → **GO TO** Step 1.
+
+**Exit check:** Either `{clientPartyId}` and `{clientPartyName}` are both non-null (route to Step 2), or both are null (route to Step 1). A partial state with one set and the other unset is invalid — halt with `⚠️ Exit check failed: inconsistent client hydration state`.
+
+---
+
+---
+
 ### Step 1: Find Party
 
 #### Step 1a: Search Party
