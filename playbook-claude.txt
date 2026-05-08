@@ -20,7 +20,7 @@ Complete AML/KYC initiation workflow triggered by natural language command (e.g.
 ### Hardcoded
 - `{yourhost}` = `"shalaka2-sand.opensandbox2.intapp.com"`
 - `{reqType}` = `"AML/KYC - Moody's GRID"`
-- `{reqRefParty}` = `"Party"`
+- `{reqRefParty}` = `"client"`
 - `{relPartyConAff}` = `"corpStructure"`
 - `{clientPartyConAff}` = `"CLNT"`
 - `{reqRefGrid}` = `"grdMoodysScreening"`
